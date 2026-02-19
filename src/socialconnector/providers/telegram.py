@@ -80,7 +80,7 @@ class TelegramAdapter(BaseAdapter):
             data["reply_to_message_id"] = reply_to
 
         self.logger.info(f"Sending Telegram message to {chat_id}")
-        response = await self.http_client.request("POST", url, json_data=data)
+        response = await self.http_client.request("POST", url, json=data)
 
         if response.status_code != 200:
             self.logger.error(f"Telegram message failed: {response.text}")
@@ -112,7 +112,7 @@ class TelegramAdapter(BaseAdapter):
             "message_id": message_id,
             "text": new_text,
         }
-        response = await self.http_client.request("POST", url, json_data=data)
+        response = await self.http_client.request("POST", url, json=data)
         response.raise_for_status()
         return MessageResponse(success=True, message_id=message_id, platform="telegram", raw=response.json())
 
@@ -120,7 +120,7 @@ class TelegramAdapter(BaseAdapter):
         """Delete a telegram message."""
         url = f"{self.api_url}/deleteMessage"
         data = {"chat_id": chat_id, "message_id": message_id}
-        response = await self.http_client.request("POST", url, json_data=data)
+        response = await self.http_client.request("POST", url, json=data)
         return response.status_code == 200
 
     async def get_messages(self, chat_id: str, *, limit: int = 50) -> list[Message]:
@@ -132,7 +132,7 @@ class TelegramAdapter(BaseAdapter):
     async def set_webhook(self, config: WebhookConfig) -> bool:
         url = f"{self.api_url}/setWebhook"
         data = {"url": config.url}
-        response = await self.http_client.request("POST", url, json_data=data)
+        response = await self.http_client.request("POST", url, json=data)
         return response.status_code == 200
 
     async def start_polling(self) -> None:
