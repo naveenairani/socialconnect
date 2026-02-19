@@ -1,0 +1,116 @@
+from abc import ABC, abstractmethod
+from typing import Any, Optional
+
+
+class AuthProvider(ABC):
+    """Abstract base for authentication strategies."""
+
+    @abstractmethod
+    def get_headers(self) -> dict[str, str]:
+        """Return authentication headers."""
+
+    @abstractmethod
+    async def refresh(self) -> None:
+        """Refresh credentials if needed."""
+
+    @abstractmethod
+    def is_valid(self) -> bool:
+        """Check if credentials are currently valid."""
+
+
+class BearerTokenAuth(AuthProvider):
+    """Simple bearer token authentication."""
+
+    def __init__(self, token: str) -> None:
+        self.token = token
+
+    def get_headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.token}"}
+
+    async def refresh(self) -> None:
+        pass
+
+    def is_valid(self) -> bool:
+        return bool(self.token)
+
+
+class OAuth2Auth(AuthProvider):
+    """OAuth2 authentication with token refresh logic."""
+
+    def __init__(
+        self,
+        token: str,
+        refresh_token: Optional[str] = None,
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
+    ) -> None:
+        self.token = token
+        self.refresh_token = refresh_token
+        self.client_id = client_id
+        self.client_secret = client_secret
+
+    def get_headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.token}"}
+
+    async def refresh(self) -> None:
+        # Implementation for OAuth2 refresh would go here
+        pass
+
+    def is_valid(self) -> bool:
+        return bool(self.token)
+
+
+class ApiKeyAuth(AuthProvider):
+    """Auth using API key and secret (can be used for HMAC)."""
+
+    def __init__(self, api_key: str, api_secret: Optional[str] = None) -> None:
+        self.api_key = api_key
+        self.api_secret = api_secret
+
+    def get_headers(self) -> dict[str, str]:
+        return {"X-API-Key": self.api_key}
+
+    async def refresh(self) -> None:
+        pass
+
+    def is_valid(self) -> bool:
+        return bool(self.api_key)
+class OAuth1Auth(AuthProvider):
+    """OAuth 1.0a authentication."""
+
+    def __init__(
+        self,
+        client_key: str,
+        client_secret: str,
+        resource_owner_key: Optional[str] = None,
+        resource_owner_secret: Optional[str] = None,
+    ) -> None:
+        self.client_key = client_key
+        self.client_secret = client_secret
+        self.resource_owner_key = resource_owner_key
+        self.resource_owner_secret = resource_owner_secret
+
+    @property
+    def auth(self) -> Any:
+        """Return the Authlib httpx-compatible auth object."""
+        from authlib.integrations.httpx_client import OAuth1Auth as AuthlibOAuth1Auth
+        
+        return AuthlibOAuth1Auth(
+            client_id=self.client_key,
+            client_secret=self.client_secret,
+            token=self.resource_owner_key,
+            token_secret=self.resource_owner_secret,
+        )
+
+    def get_auth_token(self, method: str, url: str, body: Any = None) -> str:
+        """Not used for httpx integration, but kept for compatibility."""
+        return ""
+
+    def get_headers(self) -> dict[str, str]:
+        return {}
+
+    async def refresh(self) -> None:
+        pass
+
+    def is_valid(self) -> bool:
+        return bool(self.client_key and self.client_secret)
