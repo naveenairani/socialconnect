@@ -1,24 +1,30 @@
-from typing import Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from typing import Any
+
+# Type alias for middleware callables to keep signatures readable
+_Ctx = dict[str, Any]
+_Handler = Callable[[_Ctx], Coroutine[Any, Any, Any]]
+_Middleware = Callable[[_Ctx, _Handler], Coroutine[Any, Any, Any]]
 
 
 class MiddlewareChain:
     """Manages the execution of a chain of middleware."""
 
     def __init__(self) -> None:
-        self._middlewares: list[Callable[[dict[str, Any], Callable[[dict[str, Any]], Coroutine[Any, Any, Any]]], Coroutine[Any, Any, Any]]] = []
+        self._middlewares: list[_Middleware] = []
 
-    def add(self, middleware: Callable[[dict[str, Any], Callable[[dict[str, Any]], Coroutine[Any, Any, Any]]], Coroutine[Any, Any, Any]]) -> None:
+    def add(self, middleware: _Middleware) -> None:
         """Add a middleware to the chain."""
         self._middlewares.append(middleware)
 
-    async def execute(self, context: dict[str, Any], final_handler: Callable[[dict[str, Any]], Coroutine[Any, Any, Any]]) -> Any:
+    async def execute(self, context: _Ctx, final_handler: _Handler) -> Any:
         """Execute the middleware chain followed by the final handler."""
 
-        async def _dispatch(index: int, ctx: dict[str, Any]) -> Any:
+        async def _dispatch(index: int, ctx: _Ctx) -> Any:
             if index < len(self._middlewares):
                 middleware = self._middlewares[index]
 
-                async def _next(next_ctx: dict[str, Any]) -> Any:
+                async def _next(next_ctx: _Ctx) -> Any:
                     return await _dispatch(index + 1, next_ctx)
 
                 return await middleware(ctx, _next)
@@ -29,7 +35,7 @@ class MiddlewareChain:
 
 # Example basic middleware implementations
 
-async def logging_middleware(context: dict[str, Any], next_handler: Callable[[dict[str, Any]], Coroutine[Any, Any, Any]]) -> Any:
+async def logging_middleware(context: _Ctx, next_handler: _Handler) -> Any:
     """Logs the message processing context."""
     # Pre-processing
     print(f"Processing: {context.get('action')}")

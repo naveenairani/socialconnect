@@ -1,6 +1,7 @@
 import asyncio
-import os
 import json
+import os
+
 import httpx
 from authlib.integrations.httpx_client import OAuth1Auth
 from dotenv import load_dotenv
@@ -19,7 +20,7 @@ async def test_x_post():
 
     url = "https://api.x.com/2/tweets"
     data = {"text": "Reproduction test from SocialConnector SDK!"}
-    
+
     auth = OAuth1Auth(
         client_id=api_key,
         client_secret=api_secret,
@@ -33,7 +34,7 @@ async def test_x_post():
     }
 
     print(f"Testing POST to {url} with json={data}")
-    
+
     async with httpx.AsyncClient() as client:
         # Test 1: Using json parameter
         print("\n--- Test 1: Using json parameter ---")

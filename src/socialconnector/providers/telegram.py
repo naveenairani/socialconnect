@@ -1,6 +1,7 @@
-from typing import Any, Optional
+from typing import Any
 
 from socialconnector.core.base_adapter import BaseAdapter
+from socialconnector.core.exceptions import AuthenticationError, MessageError
 from socialconnector.core.models import (
     AdapterConfig,
     HealthStatus,
@@ -11,7 +12,6 @@ from socialconnector.core.models import (
     WebhookConfig,
 )
 from socialconnector.core.registry import register_adapter
-from socialconnector.core.exceptions import AuthenticationError, MessageError
 
 
 @register_adapter("telegram")
@@ -21,9 +21,9 @@ class TelegramAdapter(BaseAdapter):
     BASE_URL = "https://api.telegram.org/bot"
 
     def __init__(
-        self, 
-        config: AdapterConfig, 
-        http_client: Any, 
+        self,
+        config: AdapterConfig,
+        http_client: Any,
         logger: Any
     ) -> None:
         super().__init__(config, http_client, logger)
@@ -35,7 +35,7 @@ class TelegramAdapter(BaseAdapter):
         url = f"{self.api_url}/getMe"
         self.logger.info("Connecting to Telegram...")
         response = await self.http_client.request("GET", url)
-        
+
         if response.status_code == 401:
             self.logger.error("Invalid Telegram bot token")
             raise AuthenticationError("Invalid Telegram token", platform="telegram")
@@ -58,7 +58,7 @@ class TelegramAdapter(BaseAdapter):
         self,
         text: str,
         *,
-        media: Optional[list[Media]] = None,
+        media: list[Media] | None = None,
     ) -> MessageResponse:
         """Post a message (Telegram doesn't have public posts, mapping to sendMessage)."""
         return await self.direct_message(chat_id="none", text=text)
@@ -68,7 +68,7 @@ class TelegramAdapter(BaseAdapter):
         chat_id: str,
         text: str,
         *,
-        reply_to: Optional[str] = None,
+        reply_to: str | None = None,
     ) -> MessageResponse:
         """Send a telegram message."""
         url = f"{self.api_url}/sendMessage"
@@ -81,7 +81,7 @@ class TelegramAdapter(BaseAdapter):
 
         self.logger.info(f"Sending Telegram message to {chat_id}")
         response = await self.http_client.request("POST", url, json_data=data)
-        
+
         if response.status_code != 200:
             self.logger.error(f"Telegram message failed: {response.text}")
             raise MessageError(f"Telegram error: {response.text}", platform="telegram")
@@ -99,7 +99,7 @@ class TelegramAdapter(BaseAdapter):
         chat_id: str,
         media: Media,
         *,
-        caption: Optional[str] = None,
+        caption: str | None = None,
     ) -> MessageResponse:
         """Not implemented in this basic example."""
         raise NotImplementedError("Media upload not supported on Telegram adapter yet.")

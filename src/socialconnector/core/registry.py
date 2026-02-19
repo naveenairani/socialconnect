@@ -1,4 +1,5 @@
-from typing import TYPE_CHECKING, Callable, Optional, Type
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Optional
 
 try:
     from importlib.metadata import entry_points
@@ -16,18 +17,18 @@ class AdapterRegistry:
     """Singleton registry for provider adapters."""
 
     _instance: Optional["AdapterRegistry"] = None
-    _adapters: dict[str, Type["BaseAdapter"]] = {}
+    _adapters: dict[str, type["BaseAdapter"]] = {}
 
     def __new__(cls) -> "AdapterRegistry":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def register(self, name: str, adapter_cls: Type["BaseAdapter"]) -> None:
+    def register(self, name: str, adapter_cls: type["BaseAdapter"]) -> None:
         """Register a new adapter class."""
         self._adapters[name] = adapter_cls
 
-    def get(self, name: str) -> Type["BaseAdapter"]:
+    def get(self, name: str) -> type["BaseAdapter"]:
         """Retrieve an adapter class by name."""
         if name not in self._adapters:
             raise ProviderNotFoundError(f"Provider '{name}' not found.")
@@ -45,10 +46,10 @@ class AdapterRegistry:
             self.register(entry.name, adapter_cls)
 
 
-def register_adapter(name: str) -> Callable[[Type["BaseAdapter"]], Type["BaseAdapter"]]:
+def register_adapter(name: str) -> Callable[[type["BaseAdapter"]], type["BaseAdapter"]]:
     """Class decorator for registering adapters."""
 
-    def decorator(cls: Type["BaseAdapter"]) -> Type["BaseAdapter"]:
+    def decorator(cls: type["BaseAdapter"]) -> type["BaseAdapter"]:
         AdapterRegistry().register(name, cls)
         return cls
 

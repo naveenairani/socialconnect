@@ -2,21 +2,19 @@
 Social Media Connector SDK.
 Unified API for Telegram, Slack, WhatsApp, Discord, Aratai, and Twitter.
 """
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
-from socialconnector.core.registry import AdapterRegistry
 from socialconnector.core.exceptions import SocialConnectorError
+from socialconnector.core.factory import AdapterFactory
 from socialconnector.core.models import (
-    AdapterConfig,
     Event,
     Media,
     Message,
     MessageResponse,
     UserInfo,
 )
-
-
-from socialconnector.core.factory import AdapterFactory
+from socialconnector.core.registry import AdapterRegistry
 from socialconnector.utils.http_client import HTTPClient
 
 
@@ -26,11 +24,11 @@ class SocialConnector:
     def __init__(self, provider: str, **config: Any) -> None:
         """Initialize the connector with a specific provider and its config."""
         self.provider_name = provider
-        
+
         # Initialize shared infrastructure
         timeout = config.get("timeout", 30.0)
         self._http_client = HTTPClient(timeout=timeout)
-        
+
         # Use Factory to create adapter with DI
         self.adapter = AdapterFactory.create(
             provider=provider,
@@ -51,7 +49,7 @@ class SocialConnector:
         self,
         text: str,
         *,
-        media: Optional[list[Media]] = None,
+        media: list[Media] | None = None,
     ) -> MessageResponse:
         """Create a public post or status update."""
         return await self.adapter.post(text, media=media)
@@ -61,7 +59,7 @@ class SocialConnector:
         chat_id: str,
         text: str,
         *,
-        reply_to: Optional[str] = None,
+        reply_to: str | None = None,
     ) -> MessageResponse:
         """Send a direct message."""
         return await self.adapter.direct_message(chat_id, text, reply_to=reply_to)
@@ -71,7 +69,7 @@ class SocialConnector:
         chat_id: str,
         media: Media,
         *,
-        caption: Optional[str] = None,
+        caption: str | None = None,
     ) -> MessageResponse:
         """Send a media attachment."""
         return await self.adapter.send_media(chat_id, media, caption=caption)
@@ -89,6 +87,7 @@ class SocialConnector:
 __all__ = [
     "SocialConnector",
     "SocialConnectorError",
+    "AdapterRegistry",
     "Message",
     "MessageResponse",
     "Event",

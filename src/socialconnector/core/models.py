@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -33,11 +33,11 @@ class AdapterConfig(BaseModel):
     """Configuration for initializing a provider adapter."""
     provider: str
     api_key: str
-    api_secret: Optional[str] = None
-    base_url: Optional[str] = None
+    api_secret: str | None = None
+    base_url: str | None = None
     timeout: float = 30.0
     max_retries: int = 3
-    rate_limit: Optional[float] = None
+    rate_limit: float | None = None
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -45,9 +45,9 @@ class UserInfo(BaseModel):
     """Unified user information."""
     id: str
     platform: str
-    username: Optional[str] = None
-    display_name: Optional[str] = None
-    avatar_url: Optional[str] = None
+    username: str | None = None
+    display_name: str | None = None
+    avatar_url: str | None = None
     is_bot: bool = False
     raw: dict[str, Any] = Field(default_factory=dict)
 
@@ -55,11 +55,11 @@ class UserInfo(BaseModel):
 class Media(BaseModel):
     """Unified media attachment."""
     type: MediaType
-    url: Optional[str] = None
-    file_bytes: Optional[bytes] = None
-    file_name: Optional[str] = None
-    mime_type: Optional[str] = None
-    size_bytes: Optional[int] = None
+    url: str | None = None
+    file_bytes: bytes | None = None
+    file_name: str | None = None
+    mime_type: str | None = None
+    size_bytes: int | None = None
     raw: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -71,9 +71,9 @@ class Message(BaseModel):
     platform: str
     chat_id: str
     sender: UserInfo
-    text: Optional[str] = None
+    text: str | None = None
     media: list[Media] = Field(default_factory=list)
-    reply_to_id: Optional[str] = None
+    reply_to_id: str | None = None
     timestamp: datetime = Field(default_factory=datetime.now)
     raw: dict[str, Any] = Field(default_factory=dict)
 
@@ -81,7 +81,7 @@ class Message(BaseModel):
 class MessageResponse(BaseModel):
     """Response after sending a message."""
     success: bool
-    message_id: Optional[str] = None
+    message_id: str | None = None
     platform: str
     timestamp: datetime = Field(default_factory=datetime.now)
     raw: dict[str, Any] = Field(default_factory=dict)
@@ -90,7 +90,7 @@ class MessageResponse(BaseModel):
 class WebhookConfig(BaseModel):
     """Webhook registration configuration."""
     url: str
-    secret: Optional[str] = None
+    secret: str | None = None
     events: list[str] = Field(default_factory=lambda: ["*"])
 
 
@@ -98,8 +98,8 @@ class HealthStatus(BaseModel):
     """Result of a provider health check."""
     provider: str
     healthy: bool
-    latency_ms: Optional[float] = None
-    error: Optional[str] = None
+    latency_ms: float | None = None
+    error: str | None = None
     checked_at: datetime = Field(default_factory=datetime.now)
 
 
@@ -107,8 +107,8 @@ class Event(BaseModel):
     """Unified event from any platform."""
     type: EventType
     platform: str
-    chat_id: Optional[str] = None
-    user: Optional[UserInfo] = None
-    message: Optional[Message] = None
+    chat_id: str | None = None
+    user: UserInfo | None = None
+    message: Message | None = None
     timestamp: datetime = Field(default_factory=datetime.now)
     raw: dict[str, Any] = Field(default_factory=dict)

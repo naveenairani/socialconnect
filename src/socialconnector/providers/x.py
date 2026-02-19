@@ -1,5 +1,5 @@
 import base64
-from typing import Any, Optional
+from typing import Any
 
 from socialconnector.core.auth import OAuth1Auth
 from socialconnector.core.base_adapter import BaseAdapter
@@ -34,7 +34,7 @@ class XAdapter(BaseAdapter):
         logger: Any,
     ) -> None:
         super().__init__(config, http_client, logger)
-        self._bearer_token: Optional[str] = None
+        self._bearer_token: str | None = None
 
         # Determine auth strategy
         self.access_token = config.extra.get("access_token")
@@ -98,7 +98,7 @@ class XAdapter(BaseAdapter):
         if response.status_code == 401:
             self.logger.error(f"X authentication failed (401): {response.text}")
             raise AuthenticationError("Invalid X credentials", platform="x")
-        
+
         if response.status_code == 429:
             self.logger.warning(
                 f"X rate limit hit during connect. "
@@ -129,20 +129,20 @@ class XAdapter(BaseAdapter):
         self,
         text: str,
         *,
-        media: Optional[list[Media]] = None,
+        media: list[Media] | None = None,
     ) -> MessageResponse:
         """Post a tweet."""
         if self.auth_strategy != "oauth1":
             self.logger.error("X posting requires OAuth 1.0a (User context)")
             raise AuthenticationError(
-                "Posting tweets requires user access tokens (OAuth 1.0a)", 
+                "Posting tweets requires user access tokens (OAuth 1.0a)",
                 platform="x"
             )
 
         url = f"{self.BASE_URL.strip()}/tweets"
         data = {"text": text}
         # Multi-media support can be added here if implemented
-        
+
         auth = await self._get_auth()
 
         self.logger.info(f"Posting tweet: {text[:30]}...")
@@ -161,7 +161,7 @@ class XAdapter(BaseAdapter):
             reset_time = response.headers.get("x-rate-limit-reset")
             remaining = response.headers.get("x-rate-limit-remaining")
             limit = response.headers.get("x-rate-limit-limit")
-            
+
             self.logger.warning(
                 f"X rate limit hit during post. "
                 f"Reset: {reset_time}, "
@@ -169,11 +169,11 @@ class XAdapter(BaseAdapter):
                 f"Limit: {limit} "
                 f"Body: {response.text}"
             )
-            
+
             retry_after = float(reset_time or 0)
             raise RateLimitError(
-                f"X rate limit hit. Body: {response.text}", 
-                platform="x", 
+                f"X rate limit hit. Body: {response.text}",
+                platform="x",
                 retry_after=retry_after
             )
 
@@ -196,7 +196,7 @@ class XAdapter(BaseAdapter):
         chat_id: str,
         text: str,
         *,
-        reply_to: Optional[str] = None,
+        reply_to: str | None = None,
     ) -> MessageResponse:
         """Send a true Twitter direct message (requires DM write permissions)."""
         # For now, providing a descriptive error as DM v2 is a separate scoped permission
@@ -223,7 +223,7 @@ class XAdapter(BaseAdapter):
         chat_id: str,
         media: Media,
         *,
-        caption: Optional[str] = None,
+        caption: str | None = None,
     ) -> MessageResponse:
         """Media upload is API v1.1. Not implemented in this basic v2 adapter."""
         raise NotImplementedError("Media upload not supported on Twitter v2 adapter yet.")

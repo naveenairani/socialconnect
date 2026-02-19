@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 
 class SocialConnectorError(Exception):
@@ -8,8 +8,8 @@ class SocialConnectorError(Exception):
         self,
         message: str,
         platform: str = "core",
-        original_error: Optional[Exception] = None,
-        details: Optional[dict[str, Any]] = None,
+        original_error: Exception | None = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.platform = platform
@@ -29,8 +29,8 @@ class RateLimitError(SocialConnectorError):
         message: str,
         platform: str,
         retry_after: float,
-        original_error: Optional[Exception] = None,
-        details: Optional[dict[str, Any]] = None,
+        original_error: Exception | None = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(message, platform, original_error, details)
         self.retry_after = retry_after

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any
 
 
 class AuthProvider(ABC):
@@ -40,9 +40,9 @@ class OAuth2Auth(AuthProvider):
     def __init__(
         self,
         token: str,
-        refresh_token: Optional[str] = None,
-        client_id: Optional[str] = None,
-        client_secret: Optional[str] = None,
+        refresh_token: str | None = None,
+        client_id: str | None = None,
+        client_secret: str | None = None,
     ) -> None:
         self.token = token
         self.refresh_token = refresh_token
@@ -63,7 +63,7 @@ class OAuth2Auth(AuthProvider):
 class ApiKeyAuth(AuthProvider):
     """Auth using API key and secret (can be used for HMAC)."""
 
-    def __init__(self, api_key: str, api_secret: Optional[str] = None) -> None:
+    def __init__(self, api_key: str, api_secret: str | None = None) -> None:
         self.api_key = api_key
         self.api_secret = api_secret
 
@@ -82,8 +82,8 @@ class OAuth1Auth(AuthProvider):
         self,
         client_key: str,
         client_secret: str,
-        resource_owner_key: Optional[str] = None,
-        resource_owner_secret: Optional[str] = None,
+        resource_owner_key: str | None = None,
+        resource_owner_secret: str | None = None,
     ) -> None:
         self.client_key = client_key
         self.client_secret = client_secret
@@ -94,7 +94,7 @@ class OAuth1Auth(AuthProvider):
     def auth(self) -> Any:
         """Return the Authlib httpx-compatible auth object."""
         from authlib.integrations.httpx_client import OAuth1Auth as AuthlibOAuth1Auth
-        
+
         return AuthlibOAuth1Auth(
             client_id=self.client_key,
             client_secret=self.client_secret,

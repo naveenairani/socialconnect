@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 from socialconnector.core.models import (
     AdapterConfig,
@@ -43,7 +44,7 @@ class BaseAdapter(ABC):
         self,
         text: str,
         *,
-        media: Optional[list[Media]] = None,
+        media: list[Media] | None = None,
     ) -> MessageResponse:
         """Create a public post or status update."""
 
@@ -53,7 +54,7 @@ class BaseAdapter(ABC):
         chat_id: str,
         text: str,
         *,
-        reply_to: Optional[str] = None,
+        reply_to: str | None = None,
     ) -> MessageResponse:
         """Send a private direct message."""
 
@@ -63,7 +64,7 @@ class BaseAdapter(ABC):
         chat_id: str,
         media: Media,
         *,
-        caption: Optional[str] = None,
+        caption: str | None = None,
     ) -> MessageResponse:
         """Send a media attachment."""
 

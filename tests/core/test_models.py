@@ -1,6 +1,9 @@
-import pytest
 from datetime import datetime
-from socialconnector.core.models import Message, UserInfo, MediaType, Media
+
+import pytest
+
+from socialconnector.core.models import Media, MediaType, Message, UserInfo
+
 
 def test_message_model_validation():
     user = UserInfo(id="user1", platform="telegram", username="tester")
@@ -11,7 +14,7 @@ def test_message_model_validation():
         sender=user,
         text="Hello world"
     )
-    
+
     assert msg.id == "msg123"
     assert msg.sender.username == "tester"
     assert isinstance(msg.timestamp, datetime)

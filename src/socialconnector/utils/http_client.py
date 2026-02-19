@@ -1,4 +1,5 @@
-from typing import Any, Optional
+from typing import Any
+
 import httpx
 
 
@@ -17,7 +18,7 @@ class HTTPClient:
         method: str,
         url: str,
         *,
-        headers: Optional[dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
         json: Any = None,
         **kwargs: Any
     ) -> httpx.Response:
@@ -27,7 +28,7 @@ class HTTPClient:
             headers = headers or {}
             if "Content-Type" not in headers:
                 headers["Content-Type"] = "application/json"
-            
+
         return await self.client.request(
             method, url, headers=headers, json=json, **kwargs
         )

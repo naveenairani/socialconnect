@@ -1,7 +1,9 @@
 import pytest
-from socialconnector.core.registry import AdapterRegistry, register_adapter
+
 from socialconnector.core.base_adapter import BaseAdapter
 from socialconnector.core.exceptions import ProviderNotFoundError
+from socialconnector.core.registry import AdapterRegistry, register_adapter
+
 
 class MockAdapter(BaseAdapter):
     def __init__(self, config, http_client, logger):
@@ -23,7 +25,7 @@ class MockAdapter(BaseAdapter):
 def test_registry_registration():
     registry = AdapterRegistry()
     registry.register("mock", MockAdapter)
-    
+
     assert registry.get("mock") == MockAdapter
     assert "mock" in registry.list()
 
@@ -31,16 +33,16 @@ def test_register_decorator():
     @register_adapter("decorated")
     class DecoratedAdapter(MockAdapter):
         pass
-    
+
     assert AdapterRegistry().get("decorated") == DecoratedAdapter
 
 def test_registry_not_found():
     with pytest.raises(ProviderNotFoundError):
         AdapterRegistry().get("non_existent")
-    
+
 def test_singleton():
     assert AdapterRegistry() is AdapterRegistry()
-    
+
     # Check that clear/internal state is shared
     AdapterRegistry().register("shared", MockAdapter)
     assert AdapterRegistry().get("shared") == MockAdapter
