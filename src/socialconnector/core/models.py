@@ -161,3 +161,14 @@ class PaginatedResult(BaseModel):
     data: list[Any] = Field(default_factory=list)
     next_token: str | None = None
     result_count: int = 0
+
+
+class PageInfo(BaseModel):
+    """Pagination metadata returned alongside a page of results."""
+
+    next_token: str | None = None
+    previous_token: str | None = None
+    result_count: int = 0
+    total_results: int | None = None
+    newest_id: str | None = None
+    oldest_id: str | None = None

@@ -116,3 +116,44 @@ class OAuth1Auth(AuthProvider):
 
     def is_valid(self) -> bool:
         return bool(self.client_key and self.client_secret)
+
+
+class OAuth2PKCEAuth(AuthProvider):
+    """OAuth2 PKCE authentication, wrapping ``OAuth2PKCEFlow``."""
+
+    def __init__(
+        self,
+        client_id: str,
+        redirect_uri: str,
+        token_url: str,
+        authorization_url: str,
+        scopes: list[str],
+        client_secret: str | None = None,
+    ) -> None:
+        from socialconnector.core.oauth2_pkce import OAuth2PKCEFlow
+
+        self.flow = OAuth2PKCEFlow(
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri,
+            token_url=token_url,
+            authorization_url=authorization_url,
+            scopes=scopes,
+        )
+
+    def get_headers(self) -> dict[str, str]:
+        if self.flow.token and self.flow.token.access_token:
+            return {"Authorization": f"Bearer {self.flow.token.access_token}"}
+        return {}
+
+    async def refresh(self) -> None:
+
+        # Callers should pass their shared http_client; this is a convenience shim.
+        raise NotImplementedError(
+            "Call flow.refresh(http_client) directly to refresh the token."
+        )
+
+    def is_valid(self) -> bool:
+        if not self.flow.token:
+            return False
+        return not self.flow.token.is_expired
