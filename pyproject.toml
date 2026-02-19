@@ -1,0 +1,79 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "socialconnector"
+version = "0.1.0"
+description = "A unified Python SDK for connecting with multiple social media platforms via a simple, consistent API."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Your Name", email = "you@example.com"},
+]
+keywords = ["social-media", "sdk", "telegram", "slack", "whatsapp", "discord", "messaging", "api"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Chat",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "httpx>=0.25.0",
+    "pydantic>=2.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+telegram = ["python-telegram-bot>=20.0"]
+slack = ["slack-sdk>=3.20"]
+whatsapp = []
+discord = ["discord.py>=2.3"]
+twitter = ["authlib>=1.3.0"]
+all = [
+    "python-telegram-bot>=20.0",
+    "slack-sdk>=3.20",
+    "discord.py>=2.3",
+    "authlib>=1.3.0",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "pytest-cov>=4.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5",
+    "pre-commit>=3.0",
+    "mkdocs>=1.5",
+    "mkdocs-material>=9.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/socialconnector"
+Documentation = "https://github.com/yourusername/socialconnector#readme"
+Repository = "https://github.com/yourusername/socialconnector"
+Issues = "https://github.com/yourusername/socialconnector/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "ANN", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
