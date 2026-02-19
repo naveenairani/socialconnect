@@ -2,6 +2,7 @@
 Social Media Connector SDK.
 Unified API for Telegram, Slack, WhatsApp, Discord, Aratai, and Twitter.
 """
+
 from collections.abc import Callable
 from typing import Any
 
@@ -30,11 +31,7 @@ class SocialConnector:
         self._http_client = HTTPClient(timeout=timeout)
 
         # Use Factory to create adapter with DI
-        self.adapter = AdapterFactory.create(
-            provider=provider,
-            http_client=self._http_client,
-            **config
-        )
+        self.adapter = AdapterFactory.create(provider=provider, http_client=self._http_client, **config)
 
     async def connect(self) -> None:
         """Establish connection to the platform."""

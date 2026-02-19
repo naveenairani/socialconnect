@@ -20,12 +20,7 @@ class TelegramAdapter(BaseAdapter):
 
     BASE_URL = "https://api.telegram.org/bot"
 
-    def __init__(
-        self,
-        config: AdapterConfig,
-        http_client: Any,
-        logger: Any
-    ) -> None:
+    def __init__(self, config: AdapterConfig, http_client: Any, logger: Any) -> None:
         super().__init__(config, http_client, logger)
         self.token = config.api_key
         self.api_url = f"{self.BASE_URL}{self.token}"
@@ -88,10 +83,7 @@ class TelegramAdapter(BaseAdapter):
 
         res_data = response.json().get("result", {})
         return MessageResponse(
-            success=True,
-            message_id=str(res_data.get("message_id")),
-            platform="telegram",
-            raw=response.json()
+            success=True, message_id=str(res_data.get("message_id")), platform="telegram", raw=response.json()
         )
 
     async def send_media(

@@ -35,6 +35,7 @@ class MiddlewareChain:
 
 # Example basic middleware implementations
 
+
 async def logging_middleware(context: _Ctx, next_handler: _Handler) -> Any:
     """Logs the message processing context."""
     # Pre-processing

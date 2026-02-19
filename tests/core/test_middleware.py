@@ -1,4 +1,3 @@
-
 import pytest
 
 from socialconnector.core.middleware import MiddlewareChain
@@ -32,6 +31,7 @@ async def test_middleware_onion_model():
 
     assert res == "result"
     assert order == ["m1_pre", "m2_pre", "final", "m2_post", "m1_post"]
+
 
 @pytest.mark.asyncio
 async def test_middleware_context_modification():

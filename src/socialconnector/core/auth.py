@@ -75,6 +75,8 @@ class ApiKeyAuth(AuthProvider):
 
     def is_valid(self) -> bool:
         return bool(self.api_key)
+
+
 class OAuth1Auth(AuthProvider):
     """OAuth 1.0a authentication."""
 

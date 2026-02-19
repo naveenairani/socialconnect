@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class MediaType(str, Enum):
     """Supported media types."""
+
     IMAGE = "image"
     VIDEO = "video"
     AUDIO = "audio"
@@ -18,6 +19,7 @@ class MediaType(str, Enum):
 
 class EventType(str, Enum):
     """Supported event types."""
+
     MESSAGE_RECEIVED = "message_received"
     MESSAGE_EDITED = "message_edited"
     MESSAGE_DELETED = "message_deleted"
@@ -31,6 +33,7 @@ class EventType(str, Enum):
 
 class AdapterConfig(BaseModel):
     """Configuration for initializing a provider adapter."""
+
     provider: str
     api_key: str
     api_secret: str | None = None
@@ -43,6 +46,7 @@ class AdapterConfig(BaseModel):
 
 class UserInfo(BaseModel):
     """Unified user information."""
+
     id: str
     platform: str
     username: str | None = None
@@ -54,6 +58,7 @@ class UserInfo(BaseModel):
 
 class Media(BaseModel):
     """Unified media attachment."""
+
     type: MediaType
     url: str | None = None
     file_bytes: bytes | None = None
@@ -65,6 +70,7 @@ class Media(BaseModel):
 
 class Message(BaseModel):
     """A unified message received from any platform."""
+
     model_config = ConfigDict(frozen=True)
 
     id: str
@@ -80,6 +86,7 @@ class Message(BaseModel):
 
 class MessageResponse(BaseModel):
     """Response after sending a message."""
+
     success: bool
     message_id: str | None = None
     platform: str
@@ -89,6 +96,7 @@ class MessageResponse(BaseModel):
 
 class WebhookConfig(BaseModel):
     """Webhook registration configuration."""
+
     url: str
     secret: str | None = None
     events: list[str] = Field(default_factory=lambda: ["*"])
@@ -96,6 +104,7 @@ class WebhookConfig(BaseModel):
 
 class HealthStatus(BaseModel):
     """Result of a provider health check."""
+
     provider: str
     healthy: bool
     latency_ms: float | None = None
@@ -105,6 +114,7 @@ class HealthStatus(BaseModel):
 
 class Event(BaseModel):
     """Unified event from any platform."""
+
     type: EventType
     platform: str
     chat_id: str | None = None
@@ -112,3 +122,42 @@ class Event(BaseModel):
     message: Message | None = None
     timestamp: datetime = Field(default_factory=datetime.now)
     raw: dict[str, Any] = Field(default_factory=dict)
+
+
+class Tweet(BaseModel):
+    """A single tweet/post from X."""
+
+    id: str
+    text: str
+    author_id: str | None = None
+    created_at: datetime | None = None
+    conversation_id: str | None = None
+    in_reply_to_user_id: str | None = None
+    referenced_tweets: list[dict[str, Any]] = Field(default_factory=list)
+    public_metrics: dict[str, int] = Field(default_factory=dict)
+    raw: dict[str, Any] = Field(default_factory=dict)
+
+
+class DMConversation(BaseModel):
+    """A direct message thread."""
+
+    id: str
+    platform: str
+    participant_ids: list[str] = Field(default_factory=list)
+    messages: list[Message] = Field(default_factory=list)
+
+
+class StreamRule(BaseModel):
+    """A filtered stream rule."""
+
+    id: str | None = None
+    value: str
+    tag: str | None = None
+
+
+class PaginatedResult(BaseModel):
+    """Wrapper for paginated API responses."""
+
+    data: list[Any] = Field(default_factory=list)
+    next_token: str | None = None
+    result_count: int = 0

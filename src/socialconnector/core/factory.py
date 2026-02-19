@@ -10,11 +10,7 @@ class AdapterFactory:
     """Factory for creating and configuring provider adapters with DI."""
 
     @staticmethod
-    def create(
-        provider: str,
-        http_client: HTTPClient,
-        **config_kwargs: Any
-    ) -> Any:
+    def create(provider: str, http_client: HTTPClient, **config_kwargs: Any) -> Any:
         """Create a provider adapter instance with injected dependencies."""
         registry = AdapterRegistry()
 
@@ -26,6 +22,7 @@ class AdapterFactory:
 
             try:
                 import importlib
+
                 importlib.import_module(f"socialconnector.providers.{module_name}")
             except ImportError:
                 pass
@@ -39,8 +36,4 @@ class AdapterFactory:
         logger = get_logger(f"socialconnector.providers.{provider}")
 
         # Instantiate with DI
-        return adapter_cls(
-            config=adapter_config,
-            http_client=http_client,
-            logger=logger
-        )
+        return adapter_cls(config=adapter_config, http_client=http_client, logger=logger)

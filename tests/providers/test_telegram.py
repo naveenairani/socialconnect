@@ -12,11 +12,7 @@ from socialconnector.utils.http_client import HTTPClient
 
 @pytest.fixture
 def telegram_config():
-    return AdapterConfig(
-        provider="telegram",
-        api_key="bot_token",
-        extra={}
-    )
+    return AdapterConfig(provider="telegram", api_key="bot_token", extra={})
 
 
 @pytest.fixture

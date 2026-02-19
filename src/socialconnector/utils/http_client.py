@@ -14,13 +14,7 @@ class HTTPClient:
         await self.client.aclose()
 
     async def request(
-        self,
-        method: str,
-        url: str,
-        *,
-        headers: dict[str, str] | None = None,
-        json: Any = None,
-        **kwargs: Any
+        self, method: str, url: str, *, headers: dict[str, str] | None = None, json: Any = None, **kwargs: Any
     ) -> httpx.Response:
         """Make an async HTTP request."""
         # Ensure Content-Type is set for JSON
@@ -29,6 +23,4 @@ class HTTPClient:
             if "Content-Type" not in headers:
                 headers["Content-Type"] = "application/json"
 
-        return await self.client.request(
-            method, url, headers=headers, json=json, **kwargs
-        )
+        return await self.client.request(method, url, headers=headers, json=json, **kwargs)

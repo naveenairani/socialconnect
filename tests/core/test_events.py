@@ -1,4 +1,3 @@
-
 import pytest
 
 from socialconnector.core.events import EventBus
@@ -21,6 +20,7 @@ async def test_event_bus_pub_sub():
     assert len(received) == 1
     assert received[0].type == EventType.MESSAGE_RECEIVED
 
+
 @pytest.mark.asyncio
 async def test_event_bus_wildcard():
     bus = EventBus()
@@ -38,6 +38,7 @@ async def test_event_bus_wildcard():
     await bus.emit(EventType.USER_JOINED, event2)
 
     assert len(received) == 2
+
 
 @pytest.mark.asyncio
 async def test_event_bus_unsubscribe():

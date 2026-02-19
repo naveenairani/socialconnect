@@ -2,6 +2,7 @@
 Slack Provider Adapter.
 See: docs/providers/SLACK.md
 """
+
 from socialconnector.core.base_adapter import BaseAdapter
 from socialconnector.core.registry import register_adapter
 
