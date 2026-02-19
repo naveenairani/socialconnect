@@ -2,8 +2,8 @@
 X Direct Messages Mixin for managing conversations and messages.
 """
 
-from typing import Any
 from datetime import datetime
+from typing import Any
 
 from socialconnector.core.models import Message, MessageResponse, UserInfo
 
@@ -49,7 +49,7 @@ class XDmsMixin:
     async def get_messages(self, chat_id: str | None = None, *, limit: int = 50) -> list[Message]:
         """Get DM events. If chat_id is provided, filters for that conversation."""
         path = "dm_events"
-        params = {"dm_event.fields": "id,text,sender_id,created_at,dm_conversation_id"}
+        params = {"dm_event.fields": "id,text,sender_id,created_at,dm_conversation_id,event_type,participant_ids"}
 
         # Fix Bug #4: pass auth_type="oauth1"
         res = await self._paginate(path, params, limit=limit, auth_type="oauth1")
@@ -63,14 +63,14 @@ class XDmsMixin:
     async def get_conversation_messages(self, conversation_id: str, *, limit: int = 50) -> list[Message]:
         """Get DM events for a specific conversation ID."""
         path = f"dm_conversations/{conversation_id}/dm_events"
-        params = {"dm_event.fields": "id,text,sender_id,created_at,dm_conversation_id"}
+        params = {"dm_event.fields": "id,text,sender_id,created_at,dm_conversation_id,event_type,participant_ids"}
         res = await self._paginate(path, params, limit=limit, auth_type="oauth1")
         return self._convert_dm_events(res.data)
 
     async def get_participant_messages(self, participant_id: str, *, limit: int = 50) -> list[Message]:
         """Get DM events for a one-to-one conversation with a participant."""
         path = f"dm_conversations/with/{participant_id}/dm_events"
-        params = {"dm_event.fields": "id,text,sender_id,created_at,dm_conversation_id"}
+        params = {"dm_event.fields": "id,text,sender_id,created_at,dm_conversation_id,event_type,participant_ids"}
         res = await self._paginate(path, params, limit=limit, auth_type="oauth1")
         return self._convert_dm_events(res.data)
 
@@ -96,7 +96,8 @@ class XDmsMixin:
         messages = []
         for e in events:
             # Only process message create events for now (X supports Join/Leave too)
-            if "text" not in e and e.get("event_type") != "MessageCreate":
+            event_type = e.get("event_type")
+            if "text" not in e and event_type != "MessageCreate":
                 continue
 
             messages.append(

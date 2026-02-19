@@ -11,6 +11,7 @@ from socialconnector.core.exceptions import AuthenticationError, RateLimitError
 from socialconnector.core.models import AdapterConfig, HealthStatus, WebhookConfig
 
 from ._auth import BearerTokenManager
+from ._compliance import XComplianceMixin
 from ._dms import XDmsMixin
 from ._http import XHttpMixin
 from ._media import XMediaMixin
@@ -19,7 +20,16 @@ from ._tweets import XTweetsMixin
 from ._users import XUsersMixin
 
 
-class XAdapter(XHttpMixin, XTweetsMixin, XUsersMixin, XDmsMixin, XStreamMixin, XMediaMixin, BaseAdapter):
+class XAdapter(
+    XHttpMixin,
+    XTweetsMixin,
+    XUsersMixin,
+    XDmsMixin,
+    XComplianceMixin,
+    XStreamMixin,
+    XMediaMixin,
+    BaseAdapter,
+):
     """X (formerly Twitter) adapter using API v2."""
 
     def __init__(

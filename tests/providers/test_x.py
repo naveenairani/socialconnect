@@ -305,3 +305,129 @@ async def test_x_create_group_conversation(x_config, http_client, mock_logger):
     res = await adapter.create_group_conversation(participant_ids, text)
     assert res.success is True
     assert res.message_id == "dm_grp_1"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_get_messages(x_config, http_client, mock_logger):
+    respx.get("https://api.x.com/2/dm_events").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "id": "e3",
+                        "text": "msg3",
+                        "sender_id": "u1",
+                        "created_at": "2023-01-01T00:00:00Z",
+                        "dm_conversation_id": "conv789",
+                    },
+                    {
+                        "id": "e4",
+                        "text": "msg4",
+                        "sender_id": "u2",
+                        "created_at": "2023-01-01T01:00:00Z",
+                        "dm_conversation_id": "conv789",
+                    },
+                ]
+            },
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    messages = await adapter.get_messages(limit=10)
+    assert len(messages) == 2
+    assert messages[0].text == "msg3"
+    assert messages[1].text == "msg4"
+
+    # Test filtering by chat_id
+    filtered = await adapter.get_messages(chat_id="conv789")
+    assert len(filtered) == 2
+
+    filtered_none = await adapter.get_messages(chat_id="nonexistent")
+    assert len(filtered_none) == 0
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_create_compliance_job(x_config, http_client, mock_logger):
+    respx.post("https://api.x.com/2/compliance/jobs").mock(
+        return_value=Response(
+            201,
+            json={
+                "data": {
+                    "id": "job123",
+                    "type": "tweets",
+                    "name": "test_job",
+                    "upload_url": "https://upload.example.com",
+                    "download_url": "https://download.example.com",
+                    "status": "created",
+                }
+            },
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    job = await adapter.create_compliance_job("tweets", "test_job")
+    assert job["id"] == "job123"
+    assert job["upload_url"] == "https://upload.example.com"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_list_compliance_jobs(x_config, http_client, mock_logger):
+    respx.get("https://api.x.com/2/compliance/jobs").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [
+                    {"id": "job1", "type": "tweets", "status": "complete"},
+                    {"id": "job2", "type": "users", "status": "in_progress"},
+                ]
+            },
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    jobs = await adapter.list_compliance_jobs()
+    assert len(jobs) == 2
+    assert jobs[0]["id"] == "job1"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_get_compliance_job(x_config, http_client, mock_logger):
+    respx.get("https://api.x.com/2/compliance/jobs/job123").mock(
+        return_value=Response(200, json={"data": {"id": "job123", "status": "complete"}})
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    job = await adapter.get_compliance_job("job123")
+    assert job["id"] == "job123"
+    assert job["status"] == "complete"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_upload_compliance_ids(x_config, http_client, mock_logger, tmp_path):
+    # Mock the external upload URL
+    respx.put("https://upload.example.com").mock(return_value=Response(200))
+
+    # Create dummy ID file
+    id_file = tmp_path / "ids.txt"
+    id_file.write_text("123\n456\n")
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    success = await adapter.upload_compliance_ids("https://upload.example.com", str(id_file))
+    assert success is True
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_download_compliance_results(x_config, http_client, mock_logger):
+    # Mock the external download URL
+    respx.get("https://download.example.com").mock(return_value=Response(200, text="123,delete\n456,delete"))
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    results = await adapter.download_compliance_results("https://download.example.com")
+    assert "123,delete" in results
