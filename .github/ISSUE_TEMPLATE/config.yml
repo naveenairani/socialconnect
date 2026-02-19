@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ask a Question
+    url: https://github.com/naveenairani/socialconnect/discussions
+    about: Use GitHub Discussions for general questions and help.
+  - name: Security Vulnerability
+    url: https://github.com/naveenairani/socialconnect/security/advisories/new
+    about: Please report security vulnerabilities via a private advisory, not a public issue.
