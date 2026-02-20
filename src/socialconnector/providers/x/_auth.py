@@ -1,4 +1,5 @@
 import base64
+import time
 from typing import Any
 
 from pydantic import SecretStr
@@ -28,6 +29,8 @@ class BearerTokenManager:
         self._http_client = http_client
         self._logger = logger
         self._token: SecretStr | None = SecretStr(pre_supplied_token) if pre_supplied_token else None
+        self._fetched_at = time.time() if pre_supplied_token else 0
+        self._expires_in = 7200  # Default 2 hours
 
     def __repr__(self) -> str:
         """Secure representation that doesn't leak secrets."""
@@ -43,9 +46,14 @@ class BearerTokenManager:
         self._token = None
 
     async def get(self) -> str:
-        """Return the cached bearer token, fetching a new one if needed."""
+        """Return the cached bearer token, fetching a new one if needed (Fix #8: Refresh)."""
         if self._token:
-            return self._token.get_secret_value()
+            # Check for expiry
+            now = time.time()
+            if now < (self._fetched_at + self._expires_in - 60):  # 60s buffer
+                return self._token.get_secret_value()
+            self._logger.debug("X bearer token expired, re-fetching")
+            self.invalidate()
 
         auth_str = f"{self._api_key.get_secret_value()}:{self._api_secret.get_secret_value()}"
         encoded_auth = base64.b64encode(auth_str.encode()).decode()
@@ -62,6 +70,9 @@ class BearerTokenManager:
 
             data = response.json()
             token = data.get("access_token")
+            # X v2 token responses include expires_in (seconds)
+            self._expires_in = data.get("expires_in", 7200)
+            self._fetched_at = time.time()
 
             if not token or not isinstance(token, str) or not token.strip():
                 raise AuthenticationError("No valid access_token received from X", platform="x")

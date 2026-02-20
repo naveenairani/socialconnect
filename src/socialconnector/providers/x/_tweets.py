@@ -49,7 +49,7 @@ class XTweetsMixin:
         """Delete a tweet."""
         self.logger.info(f"Deleting tweet: {message_id}")
         try:
-            await self._request("DELETE", f"tweets/{message_id}", auth_type="oauth1")
+            await self._request("DELETE", f"tweets/{self._validate_path_param('message_id', message_id)}", auth_type="oauth1")
             return True
         except Exception as e:
             self.logger.error(f"Failed to delete tweet {message_id}: {e}")
@@ -60,7 +60,7 @@ class XTweetsMixin:
         params = {
             "tweet.fields": "author_id,created_at,conversation_id,in_reply_to_user_id,referenced_tweets,public_metrics"
         }
-        res = await self._request("GET", f"tweets/{tweet_id}", params=params)
+        res = await self._request("GET", f"tweets/{self._validate_path_param('tweet_id', tweet_id)}", params=params)
         data = res.get("data", {})
         return Tweet(**data, raw=res)
 
@@ -90,7 +90,7 @@ class XTweetsMixin:
 
     async def get_home_timeline(self, user_id: str, *, limit: int = 50) -> PaginatedResult:
         """Get the reverse-chronological timeline for the authenticated user."""
-        path = f"users/{user_id}/timelines/reverse_chronological"
+        path = f"users/{self._validate_path_param('user_id', user_id)}/timelines/reverse_chronological"
         params = {
             "tweet.fields": "author_id,created_at,conversation_id,in_reply_to_user_id,referenced_tweets,public_metrics"
         }
@@ -98,7 +98,7 @@ class XTweetsMixin:
 
     async def get_user_tweets(self, user_id: str, *, limit: int = 50) -> PaginatedResult:
         """Get tweets from a specific user."""
-        path = f"users/{user_id}/tweets"
+        path = f"users/{self._validate_path_param('user_id', user_id)}/tweets"
         params = {
             "tweet.fields": "author_id,created_at,conversation_id,in_reply_to_user_id,referenced_tweets,public_metrics"
         }
@@ -106,7 +106,7 @@ class XTweetsMixin:
 
     async def get_user_mentions(self, user_id: str, *, limit: int = 50) -> PaginatedResult:
         """Get mentions for a specific user."""
-        path = f"users/{user_id}/mentions"
+        path = f"users/{self._validate_path_param('user_id', user_id)}/mentions"
         params = {
             "tweet.fields": "author_id,created_at,conversation_id,in_reply_to_user_id,referenced_tweets,public_metrics"
         }
@@ -114,7 +114,7 @@ class XTweetsMixin:
 
     async def get_list_tweets(self, list_id: str, *, limit: int = 50) -> PaginatedResult:
         """Get tweets from a list."""
-        path = f"lists/{list_id}/tweets"
+        path = f"lists/{self._validate_path_param('list_id', list_id)}/tweets"
         return await self._paginate(path, limit=limit)
 
     async def search_tweets(self, query: str, *, limit: int = 50, all_history: bool = False) -> PaginatedResult:

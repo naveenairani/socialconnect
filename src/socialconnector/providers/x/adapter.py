@@ -66,6 +66,11 @@ class XAdapter(
             pre_supplied_token=pre_supplied_bearer,
         )
 
+        # Rate limit tracking
+        self._rate_limit_remaining: int | None = None
+        self._rate_limit_reset: float = 0
+        self._last_request_time: float = 0
+
     async def connect(self) -> None:
         """Validate credentials."""
         self.logger.info(f"Connecting to X (Auth: {self.auth_strategy})")
@@ -81,9 +86,10 @@ class XAdapter(
             except RateLimitError as e:
                 raise e
             except Exception as e:
-                # Catch 401/403 etc which are raised by _request call to raise_for_status
-                self.logger.error(f"X authentication failed: {e}")
-                raise AuthenticationError(f"X authentication failed: {e}", platform="x") from e
+                # Fix #3: Sanitize error logs to avoid information disclosure
+                # Log only the error type and a generic message
+                self.logger.error(f"X authentication failed with {type(e).__name__}")
+                raise AuthenticationError("X authentication failed. Please check your credentials.", platform="x") from e
         else:
             # For App-only, just verify we can get a token
             await self.bearer_token_manager.get()
@@ -99,8 +105,8 @@ class XAdapter(
             await self.connect()
             return HealthStatus(provider="x", healthy=True)
         except Exception as e:
-            self.logger.warning(f"X health check failed: {e}")
-            return HealthStatus(provider="x", healthy=False, error=str(e))
+            self.logger.warning(f"X health check failed with {type(e).__name__}")
+            return HealthStatus(provider="x", healthy=False, error="API unreachable or authentication failed")
 
     async def set_webhook(self, config: WebhookConfig) -> bool:
         """Enterprise/Premium only."""

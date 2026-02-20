@@ -508,3 +508,126 @@ async def test_bearer_token_fetch_http_error(mock_logger, http_client):
         await manager.get()
 
     assert "Failed to fetch X bearer token" in str(exc.value)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_rate_limit_error_no_body_leak(x_config, mock_logger, http_client):
+    """Verify Issue #3: Rate limit errors don't leak response body."""
+    respx.get("https://api.x.com/2/tweets/1").mock(
+        return_value=Response(429, text="Sensitive body content", headers={"x-rate-limit-reset": "1234567890"})
+    )
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    with pytest.raises(RateLimitError) as exc:
+        await adapter._request("GET", "tweets/1")
+    
+    assert "Sensitive body content" not in str(exc.value)
+    assert "X rate limit hit" in str(exc.value)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_validate_path_param_rejects_invalid(x_config, mock_logger, http_client):
+    """Verify Issue #2: Malicious path parameters are rejected."""
+    from socialconnector.core.exceptions import SocialConnectorError
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    
+    with pytest.raises(SocialConnectorError) as exc:
+        await adapter.get_user_info("../../etc/passwd")
+    assert "Invalid path parameter" in str(exc.value)
+
+
+@pytest.mark.asyncio
+async def test_adapter_config_empty_api_key_rejected():
+    """Verify Issue #2: Empty configuration fields are rejected by Pydantic."""
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        AdapterConfig(provider="x", api_key="  ")
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_media_polling_max_attempts(x_config, mock_logger, http_client):
+    """Verify Issue #5: Media polling terminates after max attempts."""
+    from socialconnector.core.exceptions import MediaError
+    # Mock STATUS returning in_progress forever
+    respx.get("https://api.x.com/2/media/upload?command=STATUS&media_id=m1").mock(
+        return_value=Response(200, json={"data": {"processing_info": {"state": "in_progress", "check_after_secs": 0}}})
+    )
+    
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    # We lower MAX_POLL_ATTEMPTS for the test to be fast
+    adapter.MAX_POLL_ATTEMPTS = 2
+    
+    with pytest.raises(MediaError) as exc:
+        await adapter._poll_media_status("m1", {"state": "in_progress", "check_after_secs": 0})
+    assert "polling exceeded max attempts" in str(exc.value)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_bearer_token_expiry_refresh(mock_logger, http_client):
+    """Verify Issue #8: Expired tokens are refreshed."""
+    import time
+    from unittest.mock import MagicMock
+    
+    config = AdapterConfig(provider="x", api_key="k", api_secret="s")
+    # Mocking first fetch
+    route1 = respx.post("https://api.x.com/oauth2/token").mock(
+        return_value=Response(200, json={"access_token": "token1", "expires_in": 3600})
+    )
+    
+    adapter = XAdapter(config, http_client, mock_logger)
+    await adapter.bearer_token_manager.get()
+    assert adapter.bearer_token_manager.cached_token == "token1"
+    
+    # Mocking second fetch
+    respx.post("https://api.x.com/oauth2/token").mock(
+        return_value=Response(200, json={"access_token": "token2", "expires_in": 3600})
+    )
+    
+    # Manually expire the token
+    adapter.bearer_token_manager._fetched_at = time.time() - 4000
+    
+    token = await adapter.bearer_token_manager.get()
+    assert token == "token2"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_compliance_upload_rejects_ssrf_url(x_config, mock_logger, http_client):
+    """Verify Issue #9: SSRF attempts in compliance URLs are blocked."""
+    from socialconnector.core.exceptions import SocialConnectorError
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    
+    with pytest.raises(SocialConnectorError) as exc:
+        await adapter.upload_compliance_ids("http://169.254.169.254/latest/meta-data/", "dummy.txt")
+    assert "Insecure protocol" in str(exc.value) or "Blocked untrusted" in str(exc.value)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_compliance_upload_rejects_path_traversal(x_config, mock_logger, http_client):
+    """Verify Issue #10: Path traversal in compliance file paths is blocked."""
+    from socialconnector.core.exceptions import SocialConnectorError
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    
+    with pytest.raises(SocialConnectorError) as exc:
+        # Trying to access a path that is likely outside CWD and Temp (on Linux/Unix /etc/passwd, on Windows system files)
+        await adapter.upload_compliance_ids("https://api.x.com", "../../windows/system32/drivers/etc/hosts")
+    assert "Path traversal detected" in str(exc.value)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_auth_error_no_stack_leak(x_config, mock_logger, http_client):
+    """Verify Issue #3: Auth errors don't leak raw exception details in message."""
+    # Mock users/me returning something that causes a generic Exception
+    respx.get("https://api.x.com/2/users/me").mock(return_value=Response(500))
+    
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    with pytest.raises(AuthenticationError) as exc:
+        await adapter.connect()
+    
+    # Message should be generic
+    assert "X authentication failed. Please check your credentials." == str(exc.value)

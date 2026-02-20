@@ -13,6 +13,7 @@ class XMediaMixin:
     """Mixin for uploading media to X using the v2 chunked upload API."""
 
     MEDIA_UPLOAD_URL = "https://api.x.com/2/media/upload"
+    MAX_POLL_ATTEMPTS = 30
 
     async def _upload_media(self, media: Media) -> str:
         """Upload media using v2 chunked upload (INIT, APPEND, FINALIZE)."""
@@ -56,23 +57,32 @@ class XMediaMixin:
         return media_id
 
     async def _poll_media_status(self, media_id: str, processing_info: dict[str, Any]) -> None:
-        """Poll the status of a media upload until it completes."""
+        """Poll the status of a media upload until it completes"""
         state = processing_info.get("state")
+        attempts = 0
 
-        while state in ["pending", "in_progress"]:
-            check_after_secs = processing_info.get("check_after_secs", 1)
-            await asyncio.sleep(check_after_secs)
+        try:
+            async with asyncio.timeout(300):  # 5 minute hard cap
+                while state in ["pending", "in_progress"]:
+                    attempts += 1
+                    if attempts > self.MAX_POLL_ATTEMPTS:
+                        raise MediaError(f"Media {media_id} polling exceeded max attempts", platform="x")
 
-            status_params = {"command": "STATUS", "media_id": media_id}
-            res = await self._request("GET", self.MEDIA_UPLOAD_URL, params=status_params, auth_type="oauth1")
+                    check_after_secs = processing_info.get("check_after_secs", 1)
+                    await asyncio.sleep(check_after_secs)
 
-            # Check for error
-            processing_info = res.get("data", {}).get("processing_info", {})
-            state = processing_info.get("state")
+                    status_params = {"command": "STATUS", "media_id": media_id}
+                    res = await self._request("GET", self.MEDIA_UPLOAD_URL, params=status_params, auth_type="oauth1")
 
-            if state == "failed":
-                error_msg = processing_info.get("error", {}).get("message", "Unknown error")
-                raise MediaError(f"Media processing failed: {error_msg}", platform="x")
+                    # Check for error
+                    processing_info = res.get("data", {}).get("processing_info", {})
+                    state = processing_info.get("state")
 
-        if state != "succeeded":
-            self.logger.warning(f"Media {media_id} completed with unknown state: {state}")
+                    if state == "failed":
+                        error_msg = processing_info.get("error", {}).get("message", "Unknown error")
+                        raise MediaError(f"Media processing failed: {error_msg}", platform="x")
+
+                if state != "succeeded":
+                    self.logger.warning(f"Media {media_id} completed with unknown state: {state}")
+        except asyncio.TimeoutError:
+            raise MediaError(f"Media {media_id} processing timed out after 5 minutes", platform="x")

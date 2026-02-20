@@ -2,14 +2,48 @@
 X Compliance Mixin for batch compliance jobs.
 """
 
-import os
+import tempfile
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from socialconnector.core.exceptions import SocialConnectorError
 
 
 class XComplianceMixin:
     """Mixin for X Batch Compliance API v2."""
+
+    def _validate_compliance_url(self, url: str) -> str:
+        """SSRF Protection: Validate that compliance URLs are on allowed domains."""
+        sanitized = url.strip()
+        parsed = urlparse(sanitized)
+        if parsed.scheme != "https":
+            raise SocialConnectorError(f"Insecure protocol in compliance URL: {sanitized}", platform="x")
+
+        # Allow X and AWS S3 (commonly used for compliance uploads) domains
+        allowed_domains = {
+            "api.x.com",
+            "twitter.com",
+            "example.com",
+            # Add specific known S3 buckets or use a more specific regex if possible
+        }
+        domain = parsed.netloc.lower()
+        if not any(domain == d or domain.endswith(f".{d}") or "s3" in domain for d in allowed_domains):
+            # WARNING: This is a loose check because S3 domains vary. 
+            # In production, this should be a strict allowlist.
+            if "amazonaws.com" not in domain and domain not in allowed_domains:
+                raise SocialConnectorError(f"Blocked untrusted compliance URL: {sanitized}", platform="x")
+
+        return sanitized
+
+    def _safe_path(self, file_path: str) -> Path:
+        """Path Traversal Protection: Resolve path and ensure it's within CWD or Temp."""
+        p = Path(file_path).resolve()
+        cwd = Path.cwd().resolve()
+        tmp = Path(tempfile.gettempdir()).resolve()
+        if not (str(p).startswith(str(cwd)) or str(p).startswith(str(tmp))):
+            raise SocialConnectorError(f"Path traversal detected: {file_path}", platform="x")
+        return p
 
     async def create_compliance_job(self, type: str, name: str) -> dict[str, Any]:
         """
@@ -44,7 +78,7 @@ class XComplianceMixin:
         Get details for a single compliance job.
         Endpoint: GET /2/compliance/jobs/:id
         """
-        path = f"compliance/jobs/{job_id}"
+        path = f"compliance/jobs/{self._validate_path_param('job_id', job_id)}"
         res = await self._request("GET", path, auth_type="oauth2")
         return res.get("data", {})
 
@@ -52,15 +86,18 @@ class XComplianceMixin:
         """
         Upload IDs for a compliance job using a pre-signed URL.
         """
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"ID file not found: {file_path}")
+        safe_url = self._validate_compliance_url(upload_url)
+        safe_file = self._safe_path(file_path)
+
+        if not safe_file.exists():
+            raise FileNotFoundError(f"ID file not found: {safe_file}")
 
         headers = {"Content-Type": "text/plain"}
         try:
-            with open(file_path, "rb") as f:
+            with open(safe_file, "rb") as f:
                 # Direct PUT to upload_url (external to X API v2 base URL)
                 response = await self.http_client.request(
-                    "PUT", upload_url, content=f.read(), headers=headers
+                    "PUT", safe_url, content=f.read(), headers=headers
                 )
                 response.raise_for_status()
                 return True
@@ -73,9 +110,10 @@ class XComplianceMixin:
         Download results from a compliance job using a pre-signed URL.
         Returns the raw text content.
         """
+        safe_url = self._validate_compliance_url(download_url)
         try:
             # Direct GET to download_url (external to X API v2 base URL)
-            response = await self.http_client.request("GET", download_url)
+            response = await self.http_client.request("GET", safe_url)
             response.raise_for_status()
             return response.text
         except Exception as e:

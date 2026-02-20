@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class MediaType(str, Enum):
@@ -42,6 +42,13 @@ class AdapterConfig(BaseModel):
     max_retries: int = 3
     rate_limit: float | None = None
     extra: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("provider", "api_key")
+    @classmethod
+    def name_must_be_non_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("must not be empty")
+        return v
 
 
 class UserInfo(BaseModel):

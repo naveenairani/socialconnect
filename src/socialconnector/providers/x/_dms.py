@@ -24,7 +24,7 @@ class XDmsMixin:
         Note: chat_id is treated as a recipient user ID. Always routes to
         /2/dm_conversations/with/:recipient_id/messages.
         """
-        path = f"dm_conversations/with/{chat_id}/messages"
+        path = f"dm_conversations/with/{self._validate_path_param('chat_id', chat_id)}/messages"
         data = {"text": text}
         res = await self._request("POST", path, json=data, auth_type="oauth1")
 
@@ -37,7 +37,7 @@ class XDmsMixin:
         """
         Send a direct message to an existing conversation.
         """
-        path = f"dm_conversations/{conversation_id}/messages"
+        path = f"dm_conversations/{self._validate_path_param('conversation_id', conversation_id)}/messages"
         data = {"text": text}
         res = await self._request("POST", path, json=data, auth_type="oauth1")
 
@@ -62,14 +62,14 @@ class XDmsMixin:
 
     async def get_conversation_messages(self, conversation_id: str, *, limit: int = 50) -> list[Message]:
         """Get DM events for a specific conversation ID."""
-        path = f"dm_conversations/{conversation_id}/dm_events"
+        path = f"dm_conversations/{self._validate_path_param('conversation_id', conversation_id)}/dm_events"
         params = {"dm_event.fields": "id,text,sender_id,created_at,dm_conversation_id,event_type,participant_ids"}
         res = await self._paginate(path, params, limit=limit, auth_type="oauth1")
         return self._convert_dm_events(res.data)
 
     async def get_participant_messages(self, participant_id: str, *, limit: int = 50) -> list[Message]:
         """Get DM events for a one-to-one conversation with a participant."""
-        path = f"dm_conversations/with/{participant_id}/dm_events"
+        path = f"dm_conversations/with/{self._validate_path_param('participant_id', participant_id)}/dm_events"
         params = {"dm_event.fields": "id,text,sender_id,created_at,dm_conversation_id,event_type,participant_ids"}
         res = await self._paginate(path, params, limit=limit, auth_type="oauth1")
         return self._convert_dm_events(res.data)
