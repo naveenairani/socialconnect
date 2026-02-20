@@ -4,9 +4,12 @@ import pytest
 import respx
 from httpx import AsyncClient, Response
 
+from pydantic import SecretStr
+
 from socialconnector.core.exceptions import AuthenticationError, RateLimitError
 from socialconnector.core.models import AdapterConfig
 from socialconnector.providers.x import XAdapter
+from socialconnector.providers.x._auth import BearerTokenManager
 
 
 @pytest.fixture
@@ -33,7 +36,7 @@ def http_client():
 def mock_x_token():
     with respx.mock:
         # Corrected URL per Bug #1
-        respx.post("https://api.twitter.com/oauth2/token").mock(
+        respx.post("https://api.x.com/oauth2/token").mock(
             return_value=Response(200, json={"access_token": "mock_bearer_token"})
         )
         yield
@@ -225,7 +228,7 @@ async def test_x_bearer_token_fetching(mock_logger, http_client):
 
     config = AdapterConfig(provider="x", api_key="k", api_secret="s")
 
-    route = respx.post("https://api.twitter.com/oauth2/token").mock(
+    route = respx.post("https://api.x.com/oauth2/token").mock(
         return_value=Response(200, json={"access_token": "valid_token"})
     )
 
@@ -431,3 +434,78 @@ async def test_x_download_compliance_results(x_config, http_client, mock_logger)
     adapter = XAdapter(x_config, http_client, mock_logger)
     results = await adapter.download_compliance_results("https://download.example.com")
     assert "123,delete" in results
+
+
+@pytest.mark.asyncio
+async def test_bearer_token_manager_secret_masking(mock_logger, http_client):
+    """Verify that secrets are masked in __repr__ and stored as SecretStr."""
+    api_key = "test_key"
+    api_secret = "test_secret"
+    token = "test_token"
+    
+    manager = BearerTokenManager(api_key, api_secret, http_client, mock_logger, pre_supplied_token=token)
+    
+    # Check internal storage
+    assert isinstance(manager._api_key, SecretStr)
+    assert isinstance(manager._api_secret, SecretStr)
+    assert isinstance(manager._token, SecretStr)
+    
+    # Check __repr__ masking
+    repr_str = repr(manager)
+    assert api_key not in repr_str
+    assert api_secret not in repr_str
+    assert token not in repr_str
+    assert "api_key=<masked>" in repr_str
+    assert "api_secret=<masked>" in repr_str
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_bearer_token_fetch_success(mock_logger, http_client):
+    """Verify successful token fetch from correct URL."""
+    api_key = "key"
+    api_secret = "secret"
+    
+    # Mock the new URL
+    route = respx.post("https://api.x.com/oauth2/token").mock(
+        return_value=Response(200, json={"access_token": "new_token"})
+    )
+    
+    manager = BearerTokenManager(api_key, api_secret, http_client, mock_logger)
+    token = await manager.get()
+    
+    assert token == "new_token"
+    assert isinstance(manager._token, SecretStr)
+    assert route.called
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_bearer_token_fetch_missing_token(mock_logger, http_client):
+    """Verify error raised when response lacks access_token."""
+    respx.post("https://api.x.com/oauth2/token").mock(
+        return_value=Response(200, json={"other_field": "value"})
+    )
+    
+    manager = BearerTokenManager("k", "s", http_client, mock_logger)
+    
+    with pytest.raises(AuthenticationError) as exc:
+        await manager.get()
+    
+    assert "No valid access_token received" in str(exc.value)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_bearer_token_fetch_http_error(mock_logger, http_client):
+    """Verify HTTP errors are caught and wrapped."""
+    respx.post("https://api.x.com/oauth2/token").mock(
+        return_value=Response(500)
+    )
+    
+    manager = BearerTokenManager("k", "s", http_client, mock_logger)
+    
+    with pytest.raises(AuthenticationError) as exc:
+        await manager.get()
+    
+    assert "Failed to fetch X bearer token" in str(exc.value)

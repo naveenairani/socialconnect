@@ -1,12 +1,9 @@
-"""
-X (Twitter) App-only Bearer Token Manager.
-
-Handles fetching and caching the OAuth2 app-only bearer token from the
-correct endpoint: https://api.twitter.com/oauth2/token
-"""
-
 import base64
 from typing import Any
+
+from pydantic import SecretStr
+
+from socialconnector.core.exceptions import AuthenticationError
 
 
 class BearerTokenManager:
@@ -16,7 +13,7 @@ class BearerTokenManager:
     per adapter lifetime. Supports manual invalidation on 401.
     """
 
-    BEARER_TOKEN_URL = "https://api.twitter.com/oauth2/token"
+    BEARER_TOKEN_URL = "https://api.x.com/oauth2/token"
 
     def __init__(
         self,
@@ -26,15 +23,19 @@ class BearerTokenManager:
         logger: Any,
         pre_supplied_token: str | None = None,
     ) -> None:
-        self._api_key = api_key
-        self._api_secret = api_secret
+        self._api_key = SecretStr(api_key)
+        self._api_secret = SecretStr(api_secret)
         self._http_client = http_client
         self._logger = logger
-        self._token: str | None = pre_supplied_token
+        self._token: SecretStr | None = SecretStr(pre_supplied_token) if pre_supplied_token else None
+
+    def __repr__(self) -> str:
+        """Secure representation that doesn't leak secrets."""
+        return f"<{self.__class__.__name__} api_key=<masked> api_secret=<masked> token={'<present>' if self._token else '<absent>'}>"
 
     @property
     def cached_token(self) -> str | None:
-        return self._token
+        return self._token.get_secret_value() if self._token else None
 
     def invalidate(self) -> None:
         """Clear cached token so the next call will re-fetch."""
@@ -43,19 +44,33 @@ class BearerTokenManager:
     async def get(self) -> str:
         """Return the cached bearer token, fetching a new one if needed."""
         if self._token:
-            return self._token
+            return self._token.get_secret_value()
 
-        auth_str = f"{self._api_key}:{self._api_secret}"
+        auth_str = f"{self._api_key.get_secret_value()}:{self._api_secret.get_secret_value()}"
         encoded_auth = base64.b64encode(auth_str.encode()).decode()
 
         self._logger.debug("Fetching X App-only bearer token")
-        response = await self._http_client.request(
-            "POST",
-            self.BEARER_TOKEN_URL,
-            headers={"Authorization": f"Basic {encoded_auth}"},
-            data={"grant_type": "client_credentials"},
-        )
-        response.raise_for_status()
-        self._token = response.json().get("access_token")
-        self._logger.debug("X bearer token fetched successfully")
-        return self._token  # type: ignore[return-value]
+        try:
+            response = await self._http_client.request(
+                "POST",
+                self.BEARER_TOKEN_URL,
+                headers={"Authorization": f"Basic {encoded_auth}"},
+                data={"grant_type": "client_credentials"},
+            )
+            response.raise_for_status()
+
+            data = response.json()
+            token = data.get("access_token")
+
+            if not token or not isinstance(token, str) or not token.strip():
+                raise AuthenticationError("No valid access_token received from X", platform="x")
+
+            self._token = SecretStr(token)
+            self._logger.debug("X bearer token fetched successfully")
+            return self._token.get_secret_value()
+
+        except AuthenticationError:
+            raise
+        except Exception as e:
+            self._logger.error(f"Failed to fetch X bearer token: {e}")
+            raise AuthenticationError(f"Failed to fetch X bearer token: {e}", platform="x") from e
