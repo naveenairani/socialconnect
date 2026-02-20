@@ -3,7 +3,6 @@ import logging
 import pytest
 import respx
 from httpx import AsyncClient, Response
-
 from pydantic import SecretStr
 
 from socialconnector.core.exceptions import AuthenticationError, RateLimitError
@@ -442,14 +441,14 @@ async def test_bearer_token_manager_secret_masking(mock_logger, http_client):
     api_key = "test_key"
     api_secret = "test_secret"
     token = "test_token"
-    
+
     manager = BearerTokenManager(api_key, api_secret, http_client, mock_logger, pre_supplied_token=token)
-    
+
     # Check internal storage
     assert isinstance(manager._api_key, SecretStr)
     assert isinstance(manager._api_secret, SecretStr)
     assert isinstance(manager._token, SecretStr)
-    
+
     # Check __repr__ masking
     repr_str = repr(manager)
     assert api_key not in repr_str
@@ -465,15 +464,15 @@ async def test_bearer_token_fetch_success(mock_logger, http_client):
     """Verify successful token fetch from correct URL."""
     api_key = "key"
     api_secret = "secret"
-    
+
     # Mock the new URL
     route = respx.post("https://api.x.com/oauth2/token").mock(
         return_value=Response(200, json={"access_token": "new_token"})
     )
-    
+
     manager = BearerTokenManager(api_key, api_secret, http_client, mock_logger)
     token = await manager.get()
-    
+
     assert token == "new_token"
     assert isinstance(manager._token, SecretStr)
     assert route.called
@@ -486,12 +485,12 @@ async def test_bearer_token_fetch_missing_token(mock_logger, http_client):
     respx.post("https://api.x.com/oauth2/token").mock(
         return_value=Response(200, json={"other_field": "value"})
     )
-    
+
     manager = BearerTokenManager("k", "s", http_client, mock_logger)
-    
+
     with pytest.raises(AuthenticationError) as exc:
         await manager.get()
-    
+
     assert "No valid access_token received" in str(exc.value)
 
 
@@ -502,10 +501,10 @@ async def test_bearer_token_fetch_http_error(mock_logger, http_client):
     respx.post("https://api.x.com/oauth2/token").mock(
         return_value=Response(500)
     )
-    
+
     manager = BearerTokenManager("k", "s", http_client, mock_logger)
-    
+
     with pytest.raises(AuthenticationError) as exc:
         await manager.get()
-    
+
     assert "Failed to fetch X bearer token" in str(exc.value)

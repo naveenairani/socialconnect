@@ -31,7 +31,8 @@ class BearerTokenManager:
 
     def __repr__(self) -> str:
         """Secure representation that doesn't leak secrets."""
-        return f"<{self.__class__.__name__} api_key=<masked> api_secret=<masked> token={'<present>' if self._token else '<absent>'}>"
+        token_status = '<present>' if self._token else '<absent>'
+        return f"<{self.__class__.__name__} api_key=<masked> api_secret=<masked> token={token_status}>"
 
     @property
     def cached_token(self) -> str | None:
