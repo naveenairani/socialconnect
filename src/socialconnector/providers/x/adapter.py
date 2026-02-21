@@ -15,6 +15,7 @@ from ._compliance import XComplianceMixin
 from ._dms import XDmsMixin
 from ._http import XHttpMixin
 from ._media import XMediaMixin
+from ._notes import XNotesMixin
 from ._stream import XStreamMixin
 from ._tweets import XTweetsMixin
 from ._users import XUsersMixin
@@ -28,6 +29,7 @@ class XAdapter(
     XComplianceMixin,
     XStreamMixin,
     XMediaMixin,
+    XNotesMixin,
     BaseAdapter,
 ):
     """X (formerly Twitter) adapter using API v2."""
@@ -87,9 +89,8 @@ class XAdapter(
                 raise e
             except Exception as e:
                 # Fix #3: Sanitize error logs to avoid information disclosure
-                # Log only the error type and a generic message
-                self.logger.error(f"X authentication failed with {type(e).__name__}")
-                raise AuthenticationError("X authentication failed. Please check your credentials.", platform="x") from e
+                msg = "X authentication failed. Please check your credentials."
+                raise AuthenticationError(msg, platform="x") from e
         else:
             # For App-only, just verify we can get a token
             await self.bearer_token_manager.get()

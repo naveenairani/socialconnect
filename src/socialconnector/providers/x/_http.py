@@ -118,10 +118,7 @@ class XHttpMixin:
                     reset_time = self._rate_limit_reset
                     now = time.time()
                     # Use reset header if available, otherwise exponential backoff
-                    if reset_time > now:
-                        wait = reset_time - now + 1
-                    else:
-                        wait = min(2 ** attempt, 60)  # 2s, 4s, capped at 60s
+                    wait = reset_time - now + 1 if reset_time > now else min(2**attempt, 60)  # 2s, 4s, capped at 60s
                     self.logger.warning(
                         f"429 Rate limited (attempt {attempt}/{self.MAX_RETRIES_ON_429}) "
                         f"— retrying in {wait:.1f}s"

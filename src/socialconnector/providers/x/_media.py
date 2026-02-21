@@ -84,5 +84,5 @@ class XMediaMixin:
 
                 if state != "succeeded":
                     self.logger.warning(f"Media {media_id} completed with unknown state: {state}")
-        except asyncio.TimeoutError:
-            raise MediaError(f"Media {media_id} processing timed out after 5 minutes", platform="x")
+        except asyncio.TimeoutError as e:
+            raise MediaError(f"Media {media_id} processing timed out after 5 minutes", platform="x") from e

@@ -49,7 +49,8 @@ class XTweetsMixin:
         """Delete a tweet."""
         self.logger.info(f"Deleting tweet: {message_id}")
         try:
-            await self._request("DELETE", f"tweets/{self._validate_path_param('message_id', message_id)}", auth_type="oauth1")
+            path = f"tweets/{self._validate_path_param('message_id', message_id)}"
+            await self._request("DELETE", path, auth_type="oauth1")
             return True
         except Exception as e:
             self.logger.error(f"Failed to delete tweet {message_id}: {e}")

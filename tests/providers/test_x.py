@@ -6,7 +6,7 @@ from httpx import AsyncClient, Response
 from pydantic import SecretStr
 
 from socialconnector.core.exceptions import AuthenticationError, RateLimitError
-from socialconnector.core.models import AdapterConfig
+from socialconnector.core.models import AdapterConfig, Tweet
 from socialconnector.providers.x import XAdapter
 from socialconnector.providers.x._auth import BearerTokenManager
 
@@ -520,7 +520,7 @@ async def test_rate_limit_error_no_body_leak(x_config, mock_logger, http_client)
     adapter = XAdapter(x_config, http_client, mock_logger)
     with pytest.raises(RateLimitError) as exc:
         await adapter._request("GET", "tweets/1")
-    
+
     assert "Sensitive body content" not in str(exc.value)
     assert "X rate limit hit" in str(exc.value)
 
@@ -531,7 +531,7 @@ async def test_validate_path_param_rejects_invalid(x_config, mock_logger, http_c
     """Verify Issue #2: Malicious path parameters are rejected."""
     from socialconnector.core.exceptions import SocialConnectorError
     adapter = XAdapter(x_config, http_client, mock_logger)
-    
+
     with pytest.raises(SocialConnectorError) as exc:
         await adapter.get_user_info("../../etc/passwd")
     assert "Invalid path parameter" in str(exc.value)
@@ -554,11 +554,11 @@ async def test_media_polling_max_attempts(x_config, mock_logger, http_client):
     respx.get("https://api.x.com/2/media/upload?command=STATUS&media_id=m1").mock(
         return_value=Response(200, json={"data": {"processing_info": {"state": "in_progress", "check_after_secs": 0}}})
     )
-    
+
     adapter = XAdapter(x_config, http_client, mock_logger)
     # We lower MAX_POLL_ATTEMPTS for the test to be fast
     adapter.MAX_POLL_ATTEMPTS = 2
-    
+
     with pytest.raises(MediaError) as exc:
         await adapter._poll_media_status("m1", {"state": "in_progress", "check_after_secs": 0})
     assert "polling exceeded max attempts" in str(exc.value)
@@ -569,26 +569,25 @@ async def test_media_polling_max_attempts(x_config, mock_logger, http_client):
 async def test_bearer_token_expiry_refresh(mock_logger, http_client):
     """Verify Issue #8: Expired tokens are refreshed."""
     import time
-    from unittest.mock import MagicMock
-    
+
     config = AdapterConfig(provider="x", api_key="k", api_secret="s")
     # Mocking first fetch
-    route1 = respx.post("https://api.x.com/oauth2/token").mock(
+    respx.post("https://api.x.com/oauth2/token").mock(
         return_value=Response(200, json={"access_token": "token1", "expires_in": 3600})
     )
-    
+
     adapter = XAdapter(config, http_client, mock_logger)
     await adapter.bearer_token_manager.get()
     assert adapter.bearer_token_manager.cached_token == "token1"
-    
+
     # Mocking second fetch
     respx.post("https://api.x.com/oauth2/token").mock(
         return_value=Response(200, json={"access_token": "token2", "expires_in": 3600})
     )
-    
+
     # Manually expire the token
     adapter.bearer_token_manager._fetched_at = time.time() - 4000
-    
+
     token = await adapter.bearer_token_manager.get()
     assert token == "token2"
 
@@ -599,7 +598,7 @@ async def test_compliance_upload_rejects_ssrf_url(x_config, mock_logger, http_cl
     """Verify Issue #9: SSRF attempts in compliance URLs are blocked."""
     from socialconnector.core.exceptions import SocialConnectorError
     adapter = XAdapter(x_config, http_client, mock_logger)
-    
+
     with pytest.raises(SocialConnectorError) as exc:
         await adapter.upload_compliance_ids("http://169.254.169.254/latest/meta-data/", "dummy.txt")
     assert "Insecure protocol" in str(exc.value) or "Blocked untrusted" in str(exc.value)
@@ -611,9 +610,9 @@ async def test_compliance_upload_rejects_path_traversal(x_config, mock_logger, h
     """Verify Issue #10: Path traversal in compliance file paths is blocked."""
     from socialconnector.core.exceptions import SocialConnectorError
     adapter = XAdapter(x_config, http_client, mock_logger)
-    
+
     with pytest.raises(SocialConnectorError) as exc:
-        # Trying to access a path that is likely outside CWD and Temp (on Linux/Unix /etc/passwd, on Windows system files)
+        # Avoid path traversal (test against a likely forbidden path)
         await adapter.upload_compliance_ids("https://api.x.com", "../../windows/system32/drivers/etc/hosts")
     assert "Path traversal detected" in str(exc.value)
 
@@ -624,10 +623,126 @@ async def test_auth_error_no_stack_leak(x_config, mock_logger, http_client):
     """Verify Issue #3: Auth errors don't leak raw exception details in message."""
     # Mock users/me returning something that causes a generic Exception
     respx.get("https://api.x.com/2/users/me").mock(return_value=Response(500))
-    
+
     adapter = XAdapter(x_config, http_client, mock_logger)
     with pytest.raises(AuthenticationError) as exc:
         await adapter.connect()
-    
+
     # Message should be generic
-    assert "X authentication failed. Please check your credentials." == str(exc.value)
+    assert str(exc.value) == "X authentication failed. Please check your credentials."
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_search_written_notes_success(x_config, http_client, mock_logger):
+    """Test that search_written_notes correctly paginates and returns CommunityNote objects."""
+    respx.get("https://api.x.com/2/notes/search/notes_written").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [
+                    {"id": "note1", "text": "Content 1", "note_id": "N1"},
+                    {"id": "note2", "text": "Content 2", "note_id": "N2"},
+                ],
+                "meta": {"next_token": "token_next", "result_count": 2},
+            },
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.search_written_notes(limit=2)
+
+    assert result.result_count == 2
+    assert len(result.data) == 2
+    assert result.data[0].id == "note1"
+    assert result.data[1].id == "note2"
+    assert result.next_token == "token_next"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_search_written_notes_params(x_config, http_client, mock_logger):
+    """Verify that params like test_mode and note_fields are correctly passed."""
+    route = respx.get(
+        "https://api.x.com/2/notes/search/notes_written",
+        params={"test_mode": "true", "note.fields": "text,created_at"},
+    ).mock(return_value=Response(200, json={"data": [], "meta": {"result_count": 0}}))
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    await adapter.search_written_notes(test_mode=True, note_fields=["text", "created_at"])
+
+    assert route.called
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_create_note_success(x_config, http_client, mock_logger):
+    """Test that create_note correctly posts and returns a CommunityNote."""
+    respx.post("https://api.x.com/2/notes").mock(
+        return_value=Response(201, json={"data": {"id": "note123", "text": "New note"}})
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    note = await adapter.create_note("New note")
+
+    assert note.id == "note123"
+    assert note.text == "New note"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_evaluate_note_success(x_config, http_client, mock_logger):
+    """Test that evaluate_note correctly posts rating."""
+    respx.post("https://api.x.com/2/evaluate_note").mock(
+        return_value=Response(200, json={"data": {"success": True}})
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    success = await adapter.evaluate_note("note123", helpful=True, rating="helpful")
+
+    assert success is True
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_search_eligible_posts_success(x_config, http_client, mock_logger):
+    """Test that search_eligible_posts returns Tweet objects."""
+    respx.get("https://api.x.com/2/notes/search/posts_eligible_for_notes").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [
+                    {"id": "t1", "text": "Post 1", "author_id": "u1"},
+                    {"id": "t2", "text": "Post 2", "author_id": "u2"},
+                ],
+                "meta": {"result_count": 2},
+            },
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.search_eligible_posts(test_mode=True)
+
+    assert result.result_count == 2
+    assert len(result.data) == 2
+    assert isinstance(result.data[0], Tweet)
+    assert result.data[1].id == "t2"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_delete_note_success(x_config, http_client, mock_logger):
+    """Test that delete_note correctly calls DELETE."""
+    respx.delete("https://api.x.com/2/notes/note123").mock(
+        return_value=Response(200, json={"data": {"deleted": True}})
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    response = await adapter.delete_note("note123")
+
+    assert response.success is True
+
+
+
+
+

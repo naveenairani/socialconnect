@@ -13,7 +13,11 @@ class XUsersMixin:
         res = await self._request("GET", f"users/{self._validate_path_param('user_id', user_id)}")
         data = res.get("data", {})
         return UserInfo(
-            id=data.get("id"), platform="x", username=data.get("username"), display_name=data.get("name"), raw=res
+            id=data.get("id"),
+            platform="x",
+            username=data.get("username"),
+            display_name=data.get("name"),
+            raw=res,
         )
 
     async def get_user_by_username(self, username: str) -> UserInfo:
@@ -21,7 +25,11 @@ class XUsersMixin:
         res = await self._request("GET", f"users/by/username/{self._validate_path_param('username', username)}")
         data = res.get("data", {})
         return UserInfo(
-            id=data.get("id"), platform="x", username=data.get("username"), display_name=data.get("name"), raw=res
+            id=data.get("id"),
+            platform="x",
+            username=data.get("username"),
+            display_name=data.get("name"),
+            raw=res,
         )
 
     async def follow_user(self, user_id: str, target_user_id: str) -> bool:
@@ -36,7 +44,9 @@ class XUsersMixin:
 
     async def unfollow_user(self, user_id: str, target_user_id: str) -> bool:
         """Unfollow a user."""
-        path = f"users/{self._validate_path_param('user_id', user_id)}/following/{self._validate_path_param('target_user_id', target_user_id)}"
+        p1 = self._validate_path_param("user_id", user_id)
+        p2 = self._validate_path_param("target_user_id", target_user_id)
+        path = f"users/{p1}/following/{p2}"
         try:
             await self._request("DELETE", path, auth_type="oauth1")
             return True
@@ -66,7 +76,9 @@ class XUsersMixin:
 
     async def unlike_tweet(self, user_id: str, tweet_id: str) -> bool:
         """Unlike a tweet."""
-        path = f"users/{self._validate_path_param('user_id', user_id)}/likes/{self._validate_path_param('tweet_id', tweet_id)}"
+        p1 = self._validate_path_param("user_id", user_id)
+        p2 = self._validate_path_param("tweet_id", tweet_id)
+        path = f"users/{p1}/likes/{p2}"
         try:
             await self._request("DELETE", path, auth_type="oauth1")
             return True
@@ -91,7 +103,9 @@ class XUsersMixin:
 
     async def unretweet(self, user_id: str, tweet_id: str) -> bool:
         """Unretweet a tweet."""
-        path = f"users/{self._validate_path_param('user_id', user_id)}/retweets/{self._validate_path_param('tweet_id', tweet_id)}"
+        p1 = self._validate_path_param("user_id", user_id)
+        p2 = self._validate_path_param("tweet_id", tweet_id)
+        path = f"users/{p1}/retweets/{p2}"
         try:
             await self._request("DELETE", path, auth_type="oauth1")
             return True
@@ -111,7 +125,9 @@ class XUsersMixin:
 
     async def remove_bookmark(self, user_id: str, tweet_id: str) -> bool:
         """Remove a bookmark."""
-        path = f"users/{self._validate_path_param('user_id', user_id)}/bookmarks/{self._validate_path_param('tweet_id', tweet_id)}"
+        p1 = self._validate_path_param("user_id", user_id)
+        p2 = self._validate_path_param("tweet_id", tweet_id)
+        path = f"users/{p1}/bookmarks/{p2}"
         try:
             await self._request("DELETE", path, auth_type="oauth1")
             return True
@@ -160,7 +176,9 @@ class XUsersMixin:
 
     async def remove_list_member(self, list_id: str, user_id: str) -> bool:
         """Remove a member from a list."""
-        path = f"lists/{self._validate_path_param('list_id', list_id)}/members/{self._validate_path_param('user_id', user_id)}"
+        p1 = self._validate_path_param("list_id", list_id)
+        p2 = self._validate_path_param("user_id", user_id)
+        path = f"lists/{p1}/members/{p2}"
         try:
             await self._request("DELETE", path, auth_type="oauth1")
             return True

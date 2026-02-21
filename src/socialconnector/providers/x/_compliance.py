@@ -28,11 +28,10 @@ class XComplianceMixin:
             # Add specific known S3 buckets or use a more specific regex if possible
         }
         domain = parsed.netloc.lower()
-        if not any(domain == d or domain.endswith(f".{d}") or "s3" in domain for d in allowed_domains):
-            # WARNING: This is a loose check because S3 domains vary. 
-            # In production, this should be a strict allowlist.
-            if "amazonaws.com" not in domain and domain not in allowed_domains:
-                raise SocialConnectorError(f"Blocked untrusted compliance URL: {sanitized}", platform="x")
+        if not any(domain == d or domain.endswith(f".{d}") or "s3" in domain for d in allowed_domains) and (
+            "amazonaws.com" not in domain and domain not in allowed_domains
+        ):
+            raise SocialConnectorError(f"Blocked untrusted compliance URL: {sanitized}", platform="x")
 
         return sanitized
 

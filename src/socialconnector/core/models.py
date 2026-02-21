@@ -145,6 +145,42 @@ class Tweet(BaseModel):
     raw: dict[str, Any] = Field(default_factory=dict)
 
 
+class CommunityNote(BaseModel):
+    """Unified Community Note model."""
+
+
+    id: str
+    text: str | None = None
+    note_id: str | None = None
+    created_at: datetime | None = None
+    raw: dict[str, Any] = Field(default_factory=dict)
+
+
+class EvaluateRequest(BaseModel):
+    """Request to evaluate a community note."""
+
+    note_id: str
+    helpful: bool | None = None
+    rating: str | None = None
+    raw: dict[str, Any] = Field(default_factory=dict)
+
+
+class EvaluateResponse(BaseModel):
+    """Response from evaluating a community note."""
+
+    success: bool
+    raw: dict[str, Any] = Field(default_factory=dict)
+
+
+class DeleteResponse(BaseModel):
+    """Response from a delete operation."""
+
+    success: bool
+    raw: dict[str, Any] = Field(default_factory=dict)
+
+
+
+
 class DMConversation(BaseModel):
     """A direct message thread."""
 
