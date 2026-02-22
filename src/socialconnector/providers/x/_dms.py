@@ -48,17 +48,16 @@ class XDmsMixin:
 
     async def get_messages(self, chat_id: str | None = None, *, limit: int = 50) -> list[Message]:
         """Get DM events. If chat_id is provided, filters for that conversation."""
+        if chat_id:
+            return await self.get_conversation_messages(chat_id, limit=limit)
+
         path = "dm_events"
         params = {"dm_event.fields": "id,text,sender_id,created_at,dm_conversation_id,event_type,participant_ids"}
 
         # Fix Bug #4: pass auth_type="oauth1"
         res = await self._paginate(path, params, limit=limit, auth_type="oauth1")
 
-        events = res.data
-        if chat_id:
-            events = [e for e in events if e.get("dm_conversation_id") == chat_id]
-
-        return self._convert_dm_events(events)
+        return self._convert_dm_events(res.data)
 
     async def get_conversation_messages(self, conversation_id: str, *, limit: int = 50) -> list[Message]:
         """Get DM events for a specific conversation ID."""

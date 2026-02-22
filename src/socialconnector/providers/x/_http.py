@@ -6,6 +6,7 @@ import asyncio
 import re
 import time
 from typing import Any
+from urllib.parse import urlparse
 
 from socialconnector.core.exceptions import RateLimitError, SocialConnectorError
 from socialconnector.core.models import PaginatedResult
@@ -27,6 +28,10 @@ class XHttpMixin:
         sanitized = url.strip()
         if not sanitized.startswith("https://"):
             raise SocialConnectorError(f"Insecure or invalid URL blocked: {sanitized}", platform="x")
+
+        parsed = urlparse(sanitized)
+        if parsed.netloc not in ("api.x.com", "api.twitter.com", "upload.twitter.com"):
+            raise SocialConnectorError(f"SSRF blocked: unapproved domain {parsed.netloc}", platform="x")
         return sanitized
 
     # Minimum seconds between consecutive requests to avoid burst exhaustion.
@@ -40,6 +45,7 @@ class XHttpMixin:
         method: str,
         path: str,
         *,
+        data: dict[str, Any] | None = None,
         json: dict[str, Any] | None = None,
         params: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
@@ -49,11 +55,16 @@ class XHttpMixin:
         """Unified request handler with auth dispatch and production rate-limit handling."""
 
         # ── 1. Enforce minimum spacing between requests ──
-        now = time.time()
-        elapsed = now - self._last_request_time
-        if elapsed < self.MIN_REQUEST_INTERVAL:
-            delay = self.MIN_REQUEST_INTERVAL - elapsed
-            await asyncio.sleep(delay)
+        if not hasattr(self, "_rate_limit_lock"):
+            self._rate_limit_lock = asyncio.Lock()
+
+        async with self._rate_limit_lock:
+            now = time.time()
+            elapsed = now - self._last_request_time
+            if elapsed < self.MIN_REQUEST_INTERVAL:
+                delay = self.MIN_REQUEST_INTERVAL - elapsed
+                await asyncio.sleep(delay)
+            self._last_request_time = time.time()
 
         # ── 2. Proactive sleep if budget is exhausted or critically low ──
         if self._rate_limit_remaining is not None and self._rate_limit_remaining <= 0:
@@ -78,7 +89,9 @@ class XHttpMixin:
                     f"Rate limit low ({self._rate_limit_remaining} left) — "
                     f"pacing requests every {spacing:.1f}s"
                 )
-                await asyncio.sleep(spacing)
+                async with self._rate_limit_lock:
+                    await asyncio.sleep(spacing)
+                    self._last_request_time = time.time()
 
         # ── 3. Build and sanitize URL ──
         raw_url = path if path.startswith("http") else f"{self.BASE_URL.strip()}/{path.lstrip('/')}"
@@ -89,19 +102,17 @@ class XHttpMixin:
         response = None
 
         for attempt in range(1, self.MAX_RETRIES_ON_429 + 1):
-            self._last_request_time = time.time()
-
             if current_strategy == "oauth1":
                 auth = self.auth.auth
                 response = await self.http_client.request(
-                    method, url, json=json, params=params, headers=headers, auth=auth, files=files
+                    method, url, data=data, json=json, params=params, headers=headers, auth=auth, files=files
                 )
             else:
                 token = await self.bearer_token_manager.get()
-                hdrs = headers or {}
+                hdrs = dict(headers) if headers else {}
                 hdrs["Authorization"] = f"Bearer {token}"
                 response = await self.http_client.request(
-                    method, url, json=json, params=params, headers=hdrs, files=files
+                    method, url, data=data, json=json, params=params, headers=hdrs, files=files
                 )
 
             # ── 5. Update rate limit state from every response ──

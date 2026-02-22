@@ -71,9 +71,9 @@ X supports two primary authentication modes:
 ## Usage Example
 
 ```python
-from socialconnector import SocialConnector, AdapterConfig
+from socialconnector import SocialConnector
 
-config = AdapterConfig(
+sc = SocialConnector(
     provider="x",
     api_key="...",
     api_secret="...",
@@ -81,14 +81,16 @@ config = AdapterConfig(
     access_token_secret="..."
 )
 
-async with SocialConnector() as sc:
-    adapter = await sc.get_adapter(config)
+async def main():
+    await sc.connect()
 
     # Post a tweet
-    await adapter.post("Hello from SocialConnect!")
+    await sc.post("Hello from SocialConnect!")
 
-    # Like a tweet
-    await adapter.like_tweet(user_id="123", tweet_id="456")
+    # Like a tweet (provider-specific method)
+    await sc.adapter.like_tweet(user_id="123", tweet_id="456")
+    
+    await sc.disconnect()
 ```
 
 ## Scopes Required

@@ -43,7 +43,7 @@ class XMediaMixin:
             # In httpx, we can pass data and files.
             # v2 docs for media/upload APPEND expect media as a form field
             files = {"media": ("blob", chunk, media.mime_type)}
-            await self._request("POST", self.MEDIA_UPLOAD_URL, params=append_params, files=files, auth_type="oauth1")
+            await self._request("POST", self.MEDIA_UPLOAD_URL, data=append_params, files=files, auth_type="oauth1")
 
         # FINALIZE
         final_params = {"command": "FINALIZE", "media_id": media_id}
@@ -75,8 +75,9 @@ class XMediaMixin:
                     res = await self._request("GET", self.MEDIA_UPLOAD_URL, params=status_params, auth_type="oauth1")
 
                     # Check for error
-                    processing_info = res.get("data", {}).get("processing_info", {})
-                    state = processing_info.get("state")
+                    new_info = res.get("data", {}).get("processing_info") or res.get("processing_info", {})
+                    if new_info:
+                        state = new_info.get("state", state)
 
                     if state == "failed":
                         error_msg = processing_info.get("error", {}).get("message", "Unknown error")

@@ -204,7 +204,7 @@ async def test_x_media_upload_v2(x_config, http_client, mock_logger):
         return_value=Response(200, json={"data": {"id": "media_v2_123"}})
     )
     # APPEND
-    respx.post("https://api.x.com/2/media/upload?command=APPEND&media_id=media_v2_123&segment_index=0").mock(
+    respx.post("https://api.x.com/2/media/upload").mock(
         return_value=Response(200)
     )
     # FINALIZE
@@ -343,9 +343,36 @@ async def test_x_get_messages(x_config, http_client, mock_logger):
     assert messages[1].text == "msg4"
 
     # Test filtering by chat_id
+    respx.get("https://api.x.com/2/dm_conversations/conv789/dm_events?dm_event.fields=id,text,sender_id,created_at,dm_conversation_id,event_type,participant_ids&max_results=50").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "id": "e3",
+                        "text": "msg3",
+                        "sender_id": "u1",
+                        "created_at": "2023-01-01T00:00:00Z",
+                        "dm_conversation_id": "conv789",
+                    },
+                    {
+                        "id": "e4",
+                        "text": "msg4",
+                        "sender_id": "u2",
+                        "created_at": "2023-01-01T01:00:00Z",
+                        "dm_conversation_id": "conv789",
+                    },
+                ]
+            },
+        )
+    )
+
     filtered = await adapter.get_messages(chat_id="conv789")
     assert len(filtered) == 2
 
+    respx.get("https://api.x.com/2/dm_conversations/nonexistent/dm_events?dm_event.fields=id,text,sender_id,created_at,dm_conversation_id,event_type,participant_ids&max_results=50").mock(
+        return_value=Response(200, json={"data": []})
+    )
     filtered_none = await adapter.get_messages(chat_id="nonexistent")
     assert len(filtered_none) == 0
 

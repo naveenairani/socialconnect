@@ -2,6 +2,8 @@
 X Stream Mixin for managing filtered stream rules and polling.
 """
 
+import asyncio
+
 from socialconnector.core.models import StreamRule
 from socialconnector.core.streaming import StreamConfig, StreamError, stream_with_retry
 
@@ -42,10 +44,7 @@ class XStreamMixin:
         self._stream_active = True
         self.logger.info("Starting X filtered stream…")
 
-        bearer_token = (
-            self.config.extra.get("bearer_token")
-            or self.config.api_key
-        )
+        bearer_token = await self.bearer_token_manager.get()
         headers = {"Authorization": f"Bearer {bearer_token}"}
         url = f"{self.config.base_url or 'https://api.x.com'}/2/tweets/search/stream"
         params = {
@@ -66,17 +65,22 @@ class XStreamMixin:
         )
 
         try:
-            async for event in stream_with_retry(
+            iterator = stream_with_retry(
                 self.http_client,
                 "GET",
                 url,
                 params=params,
                 headers=headers,
                 config=config,
-            ):
-                if not self._stream_active:
+            )
+            while self._stream_active:
+                try:
+                    event = await asyncio.wait_for(anext(iterator), timeout=2.0)
+                    await self._emit("tweet_received", event)
+                except asyncio.TimeoutError:
+                    continue
+                except StopAsyncIteration:
                     break
-                await self._emit("tweet_received", event)
         except StreamError as exc:
             self.logger.error("X stream terminated: %s", exc)
             raise

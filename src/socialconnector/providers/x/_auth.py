@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import time
 from typing import Any
@@ -31,6 +32,7 @@ class BearerTokenManager:
         self._token: SecretStr | None = SecretStr(pre_supplied_token) if pre_supplied_token else None
         self._fetched_at = time.time() if pre_supplied_token else 0
         self._expires_in = 7200  # Default 2 hours
+        self._lock = asyncio.Lock()
 
     def __repr__(self) -> str:
         """Secure representation that doesn't leak secrets."""
@@ -48,41 +50,48 @@ class BearerTokenManager:
     async def get(self) -> str:
         """Return the cached bearer token, fetching a new one if needed (Fix #8: Refresh)."""
         if self._token:
-            # Check for expiry
+            # Fast-path check for expiry without lock
             now = time.time()
             if now < (self._fetched_at + self._expires_in - 60):  # 60s buffer
                 return self._token.get_secret_value()
-            self._logger.debug("X bearer token expired, re-fetching")
+
+        async with self._lock:
+            # Check for expiry again inside lock
+            if self._token:
+                now = time.time()
+                if now < (self._fetched_at + self._expires_in - 60):
+                    return self._token.get_secret_value()
+            self._logger.debug("X bearer token expired or empty, fetching new one")
             self.invalidate()
 
-        auth_str = f"{self._api_key.get_secret_value()}:{self._api_secret.get_secret_value()}"
-        encoded_auth = base64.b64encode(auth_str.encode()).decode()
+            auth_str = f"{self._api_key.get_secret_value()}:{self._api_secret.get_secret_value()}"
+            encoded_auth = base64.b64encode(auth_str.encode()).decode()
 
-        self._logger.debug("Fetching X App-only bearer token")
-        try:
-            response = await self._http_client.request(
-                "POST",
-                self.BEARER_TOKEN_URL,
-                headers={"Authorization": f"Basic {encoded_auth}"},
-                data={"grant_type": "client_credentials"},
-            )
-            response.raise_for_status()
+            self._logger.debug("Fetching X App-only bearer token")
+            try:
+                response = await self._http_client.request(
+                    "POST",
+                    self.BEARER_TOKEN_URL,
+                    headers={"Authorization": f"Basic {encoded_auth}"},
+                    data={"grant_type": "client_credentials"},
+                )
+                response.raise_for_status()
 
-            data = response.json()
-            token = data.get("access_token")
-            # X v2 token responses include expires_in (seconds)
-            self._expires_in = data.get("expires_in", 7200)
-            self._fetched_at = time.time()
+                data = response.json()
+                token = data.get("access_token")
+                # X v2 token responses include expires_in (seconds)
+                self._expires_in = data.get("expires_in", 7200)
+                self._fetched_at = time.time()
 
-            if not token or not isinstance(token, str) or not token.strip():
-                raise AuthenticationError("No valid access_token received from X", platform="x")
+                if not token or not isinstance(token, str) or not token.strip():
+                    raise AuthenticationError("No valid access_token received from X", platform="x")
 
-            self._token = SecretStr(token)
-            self._logger.debug("X bearer token fetched successfully")
-            return self._token.get_secret_value()
+                self._token = SecretStr(token)
+                self._logger.debug("X bearer token fetched successfully")
+                return self._token.get_secret_value()
 
-        except AuthenticationError:
-            raise
-        except Exception as e:
-            self._logger.error(f"Failed to fetch X bearer token: {e}")
-            raise AuthenticationError(f"Failed to fetch X bearer token: {e}", platform="x") from e
+            except AuthenticationError:
+                raise
+            except Exception as e:
+                self._logger.error(f"Failed to fetch X bearer token: {e}")
+                raise AuthenticationError(f"Failed to fetch X bearer token: {e}", platform="x") from e
