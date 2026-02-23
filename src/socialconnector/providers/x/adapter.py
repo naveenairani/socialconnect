@@ -15,6 +15,7 @@ from ._auth import BearerTokenManager
 from ._chat import XChatMixin
 from ._communities import XCommunitiesMixin
 from ._compliance import XComplianceMixin
+from ._connections import XConnectionsMixin
 from ._dms import XDmsMixin
 from ._http import XHttpMixin
 from ._media import XMediaMixin
@@ -36,6 +37,7 @@ class XAdapter(
     XAccountActivityMixin,
     XChatMixin,
     XCommunitiesMixin,
+    XConnectionsMixin,
     BaseAdapter,
 ):
     """X (formerly Twitter) adapter using API v2."""

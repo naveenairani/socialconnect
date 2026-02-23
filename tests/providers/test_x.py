@@ -1111,7 +1111,7 @@ async def test_x_get_activity_subscriptions_success(x_config, http_client, mock_
                 }
             ),
             Response(
-                200, 
+                200,
                 json={
                     "data": {"application_id": "app_1", "subscriptions": [{"id": "sub_2"}]}
                 }
@@ -1187,7 +1187,7 @@ async def test_x_create_compliance_job_success(x_config, http_client, mock_logge
 
     respx.post("https://api.x.com/2/compliance/jobs").mock(
         return_value=Response(
-            201, 
+            201,
             json={"data": {"id": "job_123", "type": "tweets", "name": "Test Job"}}
         )
     )
@@ -1207,7 +1207,7 @@ async def test_x_get_compliance_job_success(x_config, http_client, mock_logger):
     """Test getting a compliance job returning Pydantic model."""
     respx.get("https://api.x.com/2/compliance/jobs/job_123").mock(
         return_value=Response(
-            200, 
+            200,
             json={"data": {"id": "job_123", "type": "tweets", "status": "in_progress"}}
         )
     )
@@ -1225,7 +1225,7 @@ async def test_x_list_compliance_jobs_success(x_config, http_client, mock_logger
     """Test listing compliance jobs returning Pydantic model."""
     respx.get("https://api.x.com/2/compliance/jobs?type=users").mock(
         return_value=Response(
-            200, 
+            200,
             json={
                 "data": [
                     {"id": "job_1", "type": "users"},
@@ -1241,3 +1241,95 @@ async def test_x_list_compliance_jobs_success(x_config, http_client, mock_logger
     assert len(response.data) == 2
     assert response.data[0].id == "job_1"
     assert response.data[1].id == "job_2"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_get_connection_history_success(x_config, http_client, mock_logger):
+    """Test get_connection_history returns paginated response and yields objects."""
+    respx.get("https://api.x.com/2/connections").mock(
+        side_effect=[
+            Response(
+                200, 
+                json={
+                    "data": [{"id": "conn_1", "status": "active"}],
+                    "meta": {"next_token": "token_123"}
+                }
+            ),
+            Response(
+                200, 
+                json={
+                    "data": [{"id": "conn_2", "status": "inactive"}]
+                }
+            ),
+        ]
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    
+    pages = []
+    async for page in adapter.get_connection_history(status="all", max_results=10):
+        pages.append(page)
+
+    assert len(pages) == 2
+    assert pages[0].meta.next_token == "token_123"
+    assert pages[0].data[0]["id"] == "conn_1"
+    assert pages[1].data[0]["id"] == "conn_2"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_delete_all_connections_success(x_config, http_client, mock_logger):
+    """Test delete_all_connections calls correct route."""
+    route = respx.delete("https://api.x.com/2/connections/all").mock(
+        return_value=Response(
+            200, 
+            json={"data": {"successful_kills": 5, "failed_kills": 0, "results": []}}
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    response = await adapter.delete_all_connections()
+
+    assert route.called
+    assert response.data.successful_kills == 5
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_delete_connections_by_endpoint_success(x_config, http_client, mock_logger):
+    """Test delete_connections_by_endpoint calls correct route with ID parameter."""
+    route = respx.delete("https://api.x.com/2/connections/endpoint_1").mock(
+        return_value=Response(
+            200, 
+            json={"data": {"successful_kills": 2, "failed_kills": 1, "results": []}}
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    response = await adapter.delete_connections_by_endpoint("endpoint_1")
+
+    assert route.called
+    assert response.data.successful_kills == 2
+    assert response.data.failed_kills == 1
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_delete_connections_by_uuids_success(x_config, http_client, mock_logger):
+    """Test delete_connections_by_uuids properly mounts request payloads."""
+    from socialconnector.core.models import DeleteByUuidsRequest
+    
+    route = respx.delete("https://api.x.com/2/connections").mock(
+        return_value=Response(
+            200, 
+            json={"data": {"successful_kills": 3, "failed_kills": 0, "results": []}}
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    req = DeleteByUuidsRequest(uuids=["id_1", "id_2", "id_3"])
+    response = await adapter.delete_connections_by_uuids(req)
+
+    assert route.called
+    assert response.data.successful_kills == 3
