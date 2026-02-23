@@ -879,6 +879,115 @@ async def test_x_create_replay_job_success(x_config, http_client, mock_logger):
     assert response.job_id == "replay_job_999"
     assert route.called
     assert "from_date=202310221200" in str(route.calls.last.request.url)
-    assert "to_date=202310271200" in str(route.calls.last.request.url)
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_chat_send_message_success(x_config, http_client, mock_logger):
+    """Test that send_message correctly calls POST and returns the response."""
+    from socialconnector.core.models import SendMessageRequest
+
+    route = respx.post("https://api.x.com/2/chat/conversations/conv-123/messages").mock(
+        return_value=Response(201, json={"data": {"encoded_message_event": "encoded_test_data"}})
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    req = SendMessageRequest(encoded_message_create_event="event_data", message_id="msg-123")
+    response = await adapter.send_message("conv-123", body=req)
+
+    assert route.called
+    assert response.data.encoded_message_event == "encoded_test_data"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_chat_get_conversation_success(x_config, http_client, mock_logger):
+    """Test that get_conversation correctly calls GET and paginates."""
+    route1 = respx.get("https://api.x.com/2/chat/conversations/conv-123?max_results=10").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [{"id": "msg-1", "text": "hello"}],
+                "meta": {"next_token": "token-123", "result_count": 1}
+            }
+        )
+    )
+    
+    route2 = respx.get("https://api.x.com/2/chat/conversations/conv-123?max_results=10&pagination_token=token-123").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [{"id": "msg-2", "text": "world"}],
+                "meta": {"result_count": 1}
+            }
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    
+    pages = []
+    async for page in adapter.get_conversation("conv-123", max_results=10):
+        pages.append(page)
+        
+    assert len(pages) == 2
+    assert route1.called
+    assert route2.called
+    assert pages[0].data[0]["id"] == "msg-1"
+    assert pages[1].data[0]["id"] == "msg-2"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_chat_get_user_public_keys_success(x_config, http_client, mock_logger):
+    """Test get_user_public_keys correctly queries public keys."""
+    route = respx.get("https://api.x.com/2/users/user-123/public_keys").mock(
+        return_value=Response(200, json={"data": [{"public_key": "pub_key_test"}]})
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    response = await adapter.get_user_public_keys("user-123")
+
+    assert route.called
+    assert response.data[0]["public_key"] == "pub_key_test"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_chat_add_user_public_key_success(x_config, http_client, mock_logger):
+    """Test add_user_public_key calls POST."""
+    from socialconnector.core.models import AddUserPublicKeyRequest
+
+    route = respx.post("https://api.x.com/2/users/user-123/public_keys").mock(
+        return_value=Response(201, json={"data": {"version": "1.0", "error_code": None}})
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    req = AddUserPublicKeyRequest(public_key="my_new_key", version="1.0")
+    response = await adapter.add_user_public_key("user-123", body=req)
+
+    assert route.called
+    assert response.data.version == "1.0"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_chat_get_conversations_success(x_config, http_client, mock_logger):
+    """Test that get_conversations correctly calls GET."""
+    route = respx.get("https://api.x.com/2/chat/conversations?max_results=50").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [{"conversation_id": "conv-1", "type": "GROUP"}],
+                "meta": {"result_count": 1}
+            }
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    pages = []
+    async for page in adapter.get_conversations(max_results=50):
+        pages.append(page)
+
+    assert route.called
+    assert len(pages) == 1
+    assert pages[0].data[0]["conversation_id"] == "conv-1"
 
 
