@@ -87,3 +87,187 @@ class XMediaMixin:
                     self.logger.warning(f"Media {media_id} completed with unknown state: {state}")
         except asyncio.TimeoutError as e:
             raise MediaError(f"Media {media_id} processing timed out after 5 minutes", platform="x") from e
+
+    async def get_media_by_keys(
+        self,
+        media_keys: list[str],
+        media_fields: list[str] | None = None,
+    ) -> dict:
+        """
+        Get Media by media keys.
+        Retrieves details of Media files by their media keys (max 100).
+        """
+        path = "media"
+        p = {
+            "media_keys": ",".join(media_keys),
+        }
+        if media_fields:
+            p["media.fields"] = ",".join(media_fields)
+
+        return await self._request("GET", path, params=p)
+
+    async def get_media_analytics(
+        self,
+        media_keys: list[str],
+        *,
+        end_time: str | None = None,
+        start_time: str | None = None,
+        granularity: str | None = None,
+        media_analytics_fields: list[str] | None = None,
+    ) -> dict:
+        """
+        Get Media analytics.
+        Retrieves analytics data for media.
+        """
+        path = "media/analytics"
+        p = {
+            "media_keys": ",".join(media_keys),
+        }
+        if end_time:
+            p["end_time"] = end_time
+        if start_time:
+            p["start_time"] = start_time
+        if granularity:
+            p["granularity"] = granularity
+        if media_analytics_fields:
+            p["media_analytics.fields"] = ",".join(media_analytics_fields)
+
+        return await self._request("GET", path, params=p)
+
+    async def get_media_by_key(
+        self,
+        media_key: str,
+        media_fields: list[str] | None = None,
+    ) -> dict:
+        """
+        Get Media by media key.
+        Retrieves details of a specific Media file by its media key.
+        """
+        path = f"media/{self._validate_path_param('media_key', media_key)}"
+        p = {}
+        if media_fields:
+            p["media.fields"] = ",".join(media_fields)
+
+        return await self._request("GET", path, params=p or None)
+
+    async def append_upload(
+        self,
+        media_id: str,
+        media_chunk: bytes,
+        segment_index: int,
+    ) -> bool:
+        """
+        Append Media upload.
+        Appends data to a Media upload request.
+        """
+        path = f"media/upload/{self._validate_path_param('media_id', media_id)}/append"
+
+        data = {
+            "command": "APPEND",
+            "media_id": media_id,
+            "segment_index": segment_index,
+        }
+        files = {"media": ("blob", media_chunk, "application/octet-stream")}
+
+        # v2 media append endpoint requires oauth1 when using user-context (which media uploads usually require)
+        try:
+            await self._request("POST", path, data=data, files=files, auth_type="oauth1")
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to append media chunk: {e}")
+            return False
+
+    async def finalize_upload(self, media_id: str) -> dict:
+        """
+        Finalize Media upload.
+        Finalizes a Media upload request.
+        """
+        path = f"media/upload/{self._validate_path_param('media_id', media_id)}/finalize"
+
+        data = {
+            "command": "FINALIZE",
+            "media_id": media_id,
+        }
+
+        # v2 media finalize endpoint requires oauth1 when using user-context
+        res = await self._request("POST", path, data=data, auth_type="oauth1")
+        return res.get("data", res)
+
+    async def get_upload_status(
+        self,
+        media_id: str,
+    ) -> dict:
+        """
+        Get Media upload status.
+        Retrieves the status of a Media upload by its ID.
+        """
+        path = "media/upload"
+        p = {
+            "command": "STATUS",
+            "media_id": media_id,
+        }
+
+        # Checking upload status requires oauth1 context
+        res = await self._request("GET", path, params=p, auth_type="oauth1")
+
+        # Return processing_info if inside data or at top level, else return full response
+        if "data" in res and "processing_info" in res["data"]:
+            return res["data"]["processing_info"]
+        if "processing_info" in res:
+            return res["processing_info"]
+        return res.get("data", res)
+
+    async def upload(self, **kwargs: Any) -> dict:
+        """
+        Upload media.
+        Uploads a media file for use in posts or other content.
+        """
+        path = "media/upload"
+
+        # Upload endpoint requires oauth1 when using user-context
+        res = await self._request("POST", path, json=kwargs, auth_type="oauth1")
+        return res.get("data", res)
+
+    async def create_metadata(self, **kwargs: Any) -> dict:
+        """
+        Create Media metadata.
+        Creates metadata for a Media file.
+        """
+        path = "media/metadata"
+
+        # Creating metadata requires oauth1 context
+        res = await self._request("POST", path, json=kwargs, auth_type="oauth1")
+        return res.get("data", res)
+
+    async def create_subtitles(self, **kwargs: Any) -> dict:
+        """
+        Create Media subtitles.
+        Creates subtitles for a specific Media file.
+        """
+        path = "media/subtitles"
+
+        # Subtitles endpoint requires oauth1 when using user-context
+        res = await self._request("POST", path, json=kwargs, auth_type="oauth1")
+        return res.get("data", res)
+
+    async def delete_subtitles(self, **kwargs: Any) -> dict:
+        """
+        Delete Media subtitles.
+        Deletes subtitles for a specific Media file.
+        """
+        path = "media/subtitles"
+
+        # Subtitles endpoint requires oauth1 when using user-context
+        res = await self._request("DELETE", path, json=kwargs, auth_type="oauth1")
+        return res.get("data", res)
+
+    async def initialize_upload(self, **kwargs: Any) -> dict:
+        """
+        Initialize media upload.
+        Initializes a media upload.
+        """
+        path = "media/upload/initialize"
+
+        # Initialize upload endpoint requires oauth1 when using user-context
+        res = await self._request("POST", path, json=kwargs, auth_type="oauth1")
+        return res.get("data", res)

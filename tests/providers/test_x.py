@@ -1847,3 +1847,351 @@ async def test_create_list_basic(x_config, http_client, mock_logger):
     assert req_json["name"] == "New List"
     assert req_json["description"] == "My desc"
     assert req_json["private"] is True
+
+
+# ── get_media_by_keys tests ──────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_media_by_keys(x_config, http_client, mock_logger):
+    """Retrieves media by keys successfully."""
+    route = respx.get("https://api.x.com/2/media").mock(
+        return_value=Response(
+            200, json={"data": [{"media_key": "3_12345", "type": "photo"}]}
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.get_media_by_keys(["3_12345", "3_67890"], media_fields=["type", "url"])
+
+    assert result["data"][0]["media_key"] == "3_12345"
+    assert route.called
+
+    query = route.calls[0].request.url.query.decode("utf-8")
+    assert "media_keys=3_12345%2C3_67890" in query
+    assert "media.fields=type%2Curl" in query
+
+
+# ── get_media_analytics tests ────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_media_analytics(x_config, http_client, mock_logger):
+    """Retrieves media analytics successfully."""
+    route = respx.get("https://api.x.com/2/media/analytics").mock(
+        return_value=Response(
+            200, json={"data": [{"media_key": "3_12345", "view_count": 100}]}
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.get_media_analytics(
+        ["3_12345"],
+        start_time="2023-01-01T00:00:00Z",
+        end_time="2023-01-02T00:00:00Z",
+        granularity="day",
+        media_analytics_fields=["view_count", "engagement"],
+    )
+
+    assert result["data"][0]["media_key"] == "3_12345"
+    assert route.called
+
+    query = route.calls[0].request.url.query.decode("utf-8")
+    assert "media_keys=3_12345" in query
+    assert "start_time=2023-01-01T00%3A00%3A00Z" in query
+    assert "end_time=2023-01-02T00%3A00%3A00Z" in query
+    assert "granularity=day" in query
+    assert "media_analytics.fields=view_count%2Cengagement" in query
+
+
+# ── get_media_by_key tests ───────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_media_by_key_basic(x_config, http_client, mock_logger):
+    """Retrieves single media by key successfully."""
+    route = respx.get("https://api.x.com/2/media/3_12345").mock(
+        return_value=Response(
+            200, json={"data": {"media_key": "3_12345", "type": "photo"}}
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.get_media_by_key("3_12345", media_fields=["type", "url"])
+
+    assert result["data"]["media_key"] == "3_12345"
+    assert result["data"]["type"] == "photo"
+    assert route.called
+
+    query = route.calls[0].request.url.query.decode("utf-8")
+    assert "media.fields=type%2Curl" in query
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_media_by_key_invalid_id(x_config, http_client, mock_logger):
+    """Rejects malicious media keys before making any HTTP call."""
+    from socialconnector.core.exceptions import SocialConnectorError
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+
+    with pytest.raises(SocialConnectorError) as exc:
+        await adapter.get_media_by_key("../../etc/passwd")
+
+    assert "Invalid path parameter" in str(exc.value)
+
+
+# ── append_upload tests ──────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_append_upload_success(x_config, http_client, mock_logger):
+    """Successfully appends media chunk."""
+    route = respx.post("https://api.x.com/2/media/upload/3_12345/append").mock(
+        return_value=Response(204)
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.append_upload("3_12345", b"test data", 0)
+
+    assert result is True
+    assert route.called
+
+    # Assert form data
+    request = route.calls[0].request
+    assert b"APPEND" in request.content
+    assert b"3_12345" in request.content
+    assert b"test data" in request.content
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_append_upload_error(x_config, http_client, mock_logger):
+    """Handles HTTP error during append."""
+    respx.post("https://api.x.com/2/media/upload/3_12345/append").mock(
+        return_value=Response(400)
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.append_upload("3_12345", b"test data", 0)
+
+    assert result is False
+
+
+# ── finalize_upload tests ────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_finalize_upload_success(x_config, http_client, mock_logger):
+    """Successfully finalizes media upload."""
+    route = respx.post("https://api.x.com/2/media/upload/3_12345/finalize").mock(
+        return_value=Response(200, json={"data": {"media_id": "3_12345", "processing_info": {"state": "pending"}}})
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.finalize_upload("3_12345")
+
+    assert result["media_id"] == "3_12345"
+    assert result["processing_info"]["state"] == "pending"
+    assert route.called
+
+    request = route.calls[0].request
+    assert b"command=FINALIZE" in request.content
+    assert b"media_id=3_12345" in request.content
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_finalize_upload_invalid_id(x_config, http_client, mock_logger):
+    """Rejects malicious media id."""
+    from socialconnector.core.exceptions import SocialConnectorError
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+
+    with pytest.raises(SocialConnectorError) as exc:
+        await adapter.finalize_upload("../../etc/passwd")
+
+    assert "Invalid path parameter" in str(exc.value)
+
+
+# ── get_upload_status tests ──────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_upload_status_success(x_config, http_client, mock_logger):
+    """Successfully gets media upload status."""
+    route = respx.get("https://api.x.com/2/media/upload").mock(
+        return_value=Response(
+            200, json={"data": {"processing_info": {"state": "in_progress", "progress_percent": 50}}}
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.get_upload_status("3_12345")
+
+    assert result["state"] == "in_progress"
+    assert result["progress_percent"] == 50
+    assert route.called
+
+    query = route.calls[0].request.url.query.decode("utf-8")
+    assert "command=STATUS" in query
+    assert "media_id=3_12345" in query
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_upload_status_flat_response(x_config, http_client, mock_logger):
+    """Successfully gets media upload status from flat response."""
+    respx.get("https://api.x.com/2/media/upload").mock(
+        return_value=Response(
+            200, json={"processing_info": {"state": "succeeded"}}
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.get_upload_status("3_12345")
+
+    assert result["state"] == "succeeded"
+
+
+# ── upload tests ─────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_upload_success(x_config, http_client, mock_logger):
+    """Successfully initiates media upload via upload()."""
+    route = respx.post("https://api.x.com/2/media/upload").mock(
+        return_value=Response(
+            200, json={"data": {"id": "3_12345"}}
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.upload(command="INIT", total_bytes=1024, media_type="image/jpeg")
+
+    assert result["id"] == "3_12345"
+    assert route.called
+
+    import json
+    request = route.calls[0].request
+    req_json = json.loads(request.content)
+    assert req_json["command"] == "INIT"
+    assert req_json["total_bytes"] == 1024
+    assert req_json["media_type"] == "image/jpeg"
+
+
+# ── create_metadata tests ────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_metadata_success(x_config, http_client, mock_logger):
+    """Successfully creates media metadata."""
+    route = respx.post("https://api.x.com/2/media/metadata").mock(
+        return_value=Response(
+            201, json={"data": {}}
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.create_metadata(media_id="3_12345", alt_text={"text": "A description"})
+
+    assert result == {}
+    assert route.called
+
+    import json
+    request = route.calls[0].request
+    req_json = json.loads(request.content)
+    assert req_json["media_id"] == "3_12345"
+    assert req_json["alt_text"]["text"] == "A description"
+
+# ── create_subtitles tests ───────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_subtitles_success(x_config, http_client, mock_logger):
+    """Successfully creates media subtitles."""
+    route = respx.post("https://api.x.com/2/media/subtitles").mock(
+        return_value=Response(
+            201, json={"data": {"media_id": "3_12345"}}
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    subtitles = [{"media_id": "3_12345", "language_code": "en", "display_name": "English"}]
+    result = await adapter.create_subtitles(media_id="3_12345", subtitles=subtitles)
+
+    assert result["media_id"] == "3_12345"
+    assert route.called
+
+    import json
+    request = route.calls[0].request
+    req_json = json.loads(request.content)
+    assert req_json["media_id"] == "3_12345"
+    assert req_json["subtitles"][0]["language_code"] == "en"
+
+
+# ── delete_subtitles tests ───────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_delete_subtitles_success(x_config, http_client, mock_logger):
+    """Successfully deletes media subtitles."""
+    route = respx.delete("https://api.x.com/2/media/subtitles").mock(
+        return_value=Response(
+            200, json={"data": {"media_id": "3_12345"}}
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+
+    result = await adapter.delete_subtitles(
+        media_id="3_12345",
+        media_category="TweetVideo",
+        subtitle_info={"subtitles": [{"language_code": "en"}]}
+    )
+
+    assert result["media_id"] == "3_12345"
+    assert route.called
+
+    import json
+    request = route.calls[0].request
+    req_json = json.loads(request.content)
+    assert req_json["media_id"] == "3_12345"
+    assert req_json["media_category"] == "TweetVideo"
+
+
+# ── initialize_upload tests ──────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_initialize_upload_success(x_config, http_client, mock_logger):
+    """Successfully initializes media upload via initialize_upload()."""
+    route = respx.post("https://api.x.com/2/media/upload/initialize").mock(
+        return_value=Response(
+            200, json={"data": {"id": "3_12345"}}
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.initialize_upload(total_bytes=1024, media_type="image/jpeg", media_category="TweetVideo")
+
+    assert result["id"] == "3_12345"
+    assert route.called
+
+    import json
+    request = route.calls[0].request
+    req_json = json.loads(request.content)
+    assert req_json["total_bytes"] == 1024
+    assert req_json["media_type"] == "image/jpeg"
+    assert req_json["media_category"] == "TweetVideo"
