@@ -397,9 +397,11 @@ async def test_x_create_compliance_job(x_config, http_client, mock_logger):
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
-    job = await adapter.create_compliance_job("tweets", "test_job")
-    assert job["id"] == "job123"
-    assert job["upload_url"] == "https://upload.example.com"
+    from socialconnector.core.models import CreateJobsRequest
+    req = CreateJobsRequest(type="tweets", name="test_job")
+    job = await adapter.create_compliance_job(body=req)
+    assert job.data.id == "job123"
+    assert job.data.upload_url == "https://upload.example.com"
 
 
 @pytest.mark.asyncio
@@ -419,8 +421,8 @@ async def test_x_list_compliance_jobs(x_config, http_client, mock_logger):
 
     adapter = XAdapter(x_config, http_client, mock_logger)
     jobs = await adapter.list_compliance_jobs()
-    assert len(jobs) == 2
-    assert jobs[0]["id"] == "job1"
+    assert len(jobs.data) == 2
+    assert jobs.data[0].id == "job1"
 
 
 @pytest.mark.asyncio
@@ -432,8 +434,8 @@ async def test_x_get_compliance_job(x_config, http_client, mock_logger):
 
     adapter = XAdapter(x_config, http_client, mock_logger)
     job = await adapter.get_compliance_job("job123")
-    assert job["id"] == "job123"
-    assert job["status"] == "complete"
+    assert job.data.id == "job123"
+    assert job.data.status == "complete"
 
 
 @pytest.mark.asyncio
@@ -994,7 +996,7 @@ async def test_x_communities_get_by_id_success(x_config, http_client, mock_logge
     """Test that get_community_by_id correctly calls GET and returns the response."""
     route = respx.get("https://api.x.com/2/communities/comm-123").mock(
         return_value=Response(
-            200, 
+            200,
             json={
                 "data": {"id": "comm-123", "name": "Python Developers", "created_at": "2023-01-01T00:00:00.000Z"}
             }
@@ -1023,7 +1025,7 @@ async def test_x_communities_search_success(x_config, http_client, mock_logger):
             }
         )
     )
-    
+
     route2 = respx.get("https://api.x.com/2/communities/search?query=programming&max_results=10&pagination_token=token-123").mock(
         return_value=Response(
             200,
@@ -1035,11 +1037,11 @@ async def test_x_communities_search_success(x_config, http_client, mock_logger):
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
-    
+
     pages = []
     async for page in adapter.search_communities("programming", max_results=10):
         pages.append(page)
-        
+
     assert len(pages) == 2
     assert route1.called
     assert route2.called
@@ -1101,13 +1103,24 @@ async def test_x_get_activity_subscriptions_success(x_config, http_client, mock_
     """Test that get_activity_subscriptions correctly paginates and calls GET on activity/subscriptions."""
     respx.get("https://api.x.com/2/activity/subscriptions").mock(
         side_effect=[
-            Response(200, json={"data": {"application_id": "app_1", "subscriptions": [{"id": "sub_1"}]}, "meta": {"next_token": "token_1"}}),
-            Response(200, json={"data": {"application_id": "app_1", "subscriptions": [{"id": "sub_2"}]}}),
+            Response(
+                200,
+                json={
+                    "data": {"application_id": "app_1", "subscriptions": [{"id": "sub_1"}]},
+                    "meta": {"next_token": "token_1"}
+                }
+            ),
+            Response(
+                200, 
+                json={
+                    "data": {"application_id": "app_1", "subscriptions": [{"id": "sub_2"}]}
+                }
+            ),
         ]
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
-    
+
     pages = []
     async for page in adapter.get_activity_subscriptions(max_results=1):
         pages.append(page)
@@ -1121,7 +1134,7 @@ async def test_x_get_activity_subscriptions_success(x_config, http_client, mock_
 async def test_x_activity_stream_success(x_config, http_client, mock_logger):
     """Test that stream correctly yields StreamResponse objects using stream_with_retry."""
     import json
-    from httpx import Response
+
     from socialconnector.core.models import StreamResponse
 
     # Note: respx doesn't easily mock async streams using stream_with_retry,
@@ -1143,7 +1156,7 @@ async def test_x_activity_stream_success(x_config, http_client, mock_logger):
 
     adapter = XAdapter(x_config, http_client, mock_logger)
     adapter._last_request_time = 0  # disable rate limits
-    
+
     # Mock token method
     async def mock_get_token():
         return "mock_token"
@@ -1151,16 +1164,80 @@ async def test_x_activity_stream_success(x_config, http_client, mock_logger):
 
     # Mock the actual stream method from http_client
     adapter.http_client.stream = lambda *args, **kwargs: MockStreamContext()
-    
-    from socialconnector.core.streaming import StreamConfig
+
 
     events = []
     async for event in adapter.stream(backfill_minutes=5):
         events.append(event)
         if len(events) == 2:
             break
-        
+
     assert len(events) == 2
+    assert isinstance(events[0], StreamResponse)
     assert isinstance(events[0], StreamResponse)
     assert events[0].data["id"] == "act_1"
     assert events[1].data["id"] == "act_2"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_create_compliance_job_success(x_config, http_client, mock_logger):
+    """Test creating a compliance job returning Pydantic model."""
+    from socialconnector.core.models import CreateJobsRequest
+
+    respx.post("https://api.x.com/2/compliance/jobs").mock(
+        return_value=Response(
+            201, 
+            json={"data": {"id": "job_123", "type": "tweets", "name": "Test Job"}}
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    req = CreateJobsRequest(type="tweets", name="Test Job")
+    response = await adapter.create_compliance_job(body=req)
+
+    assert response.data.id == "job_123"
+    assert response.data.type == "tweets"
+    assert response.data.name == "Test Job"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_get_compliance_job_success(x_config, http_client, mock_logger):
+    """Test getting a compliance job returning Pydantic model."""
+    respx.get("https://api.x.com/2/compliance/jobs/job_123").mock(
+        return_value=Response(
+            200, 
+            json={"data": {"id": "job_123", "type": "tweets", "status": "in_progress"}}
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    response = await adapter.get_compliance_job("job_123")
+
+    assert response.data.id == "job_123"
+    assert response.data.status == "in_progress"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_list_compliance_jobs_success(x_config, http_client, mock_logger):
+    """Test listing compliance jobs returning Pydantic model."""
+    respx.get("https://api.x.com/2/compliance/jobs?type=users").mock(
+        return_value=Response(
+            200, 
+            json={
+                "data": [
+                    {"id": "job_1", "type": "users"},
+                    {"id": "job_2", "type": "users"}
+                ]
+            }
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    response = await adapter.list_compliance_jobs(type="users")
+
+    assert len(response.data) == 2
+    assert response.data[0].id == "job_1"
+    assert response.data[1].id == "job_2"

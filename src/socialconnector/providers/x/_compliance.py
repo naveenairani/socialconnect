@@ -4,10 +4,15 @@ X Compliance Mixin for batch compliance jobs.
 
 import tempfile
 from pathlib import Path
-from typing import Any
 from urllib.parse import urlparse
 
 from socialconnector.core.exceptions import SocialConnectorError
+from socialconnector.core.models import (
+    CreateJobsRequest,
+    CreateJobsResponse,
+    GetJobsByIdResponse,
+    GetJobsResponse,
+)
 
 
 class XComplianceMixin:
@@ -44,20 +49,20 @@ class XComplianceMixin:
             raise SocialConnectorError(f"Path traversal detected: {file_path}", platform="x")
         return p
 
-    async def create_compliance_job(self, type: str, name: str) -> dict[str, Any]:
+    async def create_compliance_job(self, body: CreateJobsRequest) -> CreateJobsResponse:
         """
         Create a new compliance job (tweets or users).
         Endpoint: POST /2/compliance/jobs
         """
         path = "compliance/jobs"
-        data = {"type": type, "name": name}
+        data = body.model_dump(exclude_none=True)
         # Compliance jobs use Bearer Token (App-only)
         res = await self._request("POST", path, json=data, auth_type="oauth2")
-        return res.get("data", {})
+        return CreateJobsResponse.model_validate(res)
 
     async def list_compliance_jobs(
         self, type: str | None = None, status: str | None = None
-    ) -> list[dict[str, Any]]:
+    ) -> GetJobsResponse:
         """
         Get a list of compliance jobs.
         Endpoint: GET /2/compliance/jobs
@@ -70,16 +75,16 @@ class XComplianceMixin:
             params["status"] = status
 
         res = await self._request("GET", path, params=params, auth_type="oauth2")
-        return res.get("data", [])
+        return GetJobsResponse.model_validate(res)
 
-    async def get_compliance_job(self, job_id: str) -> dict[str, Any]:
+    async def get_compliance_job(self, job_id: str) -> GetJobsByIdResponse:
         """
         Get details for a single compliance job.
         Endpoint: GET /2/compliance/jobs/:id
         """
         path = f"compliance/jobs/{self._validate_path_param('job_id', job_id)}"
         res = await self._request("GET", path, auth_type="oauth2")
-        return res.get("data", {})
+        return GetJobsByIdResponse.model_validate(res)
 
     async def upload_compliance_ids(self, upload_url: str, file_path: str) -> bool:
         """

@@ -3,6 +3,8 @@ X Account Activity Mixin for webhooks and subscriptions.
 """
 
 
+from collections.abc import AsyncGenerator
+
 from socialconnector.core.models import (
     CreateReplayJobResponse,
     CreateSubscriptionRequest,
@@ -10,13 +12,12 @@ from socialconnector.core.models import (
     DeleteSubscriptionResponse,
     GetSubscriptionCountResponse,
     GetSubscriptionsResponse,
+    StreamResponse,
     UpdateSubscriptionRequest,
     UpdateSubscriptionResponse,
     ValidateSubscriptionResponse,
-    StreamResponse,
 )
 from socialconnector.core.streaming import StreamConfig, stream_with_retry
-from typing import AsyncGenerator
 
 
 class XAccountActivityMixin:
@@ -189,7 +190,7 @@ class XAccountActivityMixin:
                 next_token = page_response.meta.next_token
             elif isinstance(res, dict) and "meta" in res:
                 next_token = res["meta"].get("next_token")
-            
+
             if not next_token:
                 break
             current_pagination_token = next_token
