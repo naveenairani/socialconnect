@@ -10,6 +10,7 @@ from socialconnector.core.base_adapter import BaseAdapter
 from socialconnector.core.exceptions import AuthenticationError, RateLimitError
 from socialconnector.core.models import AdapterConfig, HealthStatus, WebhookConfig
 
+from ._account_activity import XAccountActivityMixin
 from ._auth import BearerTokenManager
 from ._compliance import XComplianceMixin
 from ._dms import XDmsMixin
@@ -30,6 +31,7 @@ class XAdapter(
     XStreamMixin,
     XMediaMixin,
     XNotesMixin,
+    XAccountActivityMixin,
     BaseAdapter,
 ):
     """X (formerly Twitter) adapter using API v2."""

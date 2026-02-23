@@ -766,10 +766,119 @@ async def test_x_delete_note_success(x_config, http_client, mock_logger):
 
     adapter = XAdapter(x_config, http_client, mock_logger)
     response = await adapter.delete_note("note123")
-
     assert response.success is True
 
 
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_validate_subscription_success(x_config, http_client, mock_logger):
+    """Test that validate_subscription correctly calls GET."""
+    respx.get("https://api.x.com/2/account_activity/webhooks/webhook_123/subscriptions/all").mock(
+        return_value=Response(200, json={"data": {"subscribed": True}})
+    )
 
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    response = await adapter.validate_subscription("webhook_123")
+
+    assert response.data.subscribed is True
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_create_subscription_success(x_config, http_client, mock_logger):
+    """Test that create_subscription correctly calls POST."""
+    from socialconnector.core.models import CreateSubscriptionRequest
+
+    respx.post("https://api.x.com/2/account_activity/webhooks/webhook_123/subscriptions/all").mock(
+        return_value=Response(201, json={"data": {"subscribed": True}})
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    req = CreateSubscriptionRequest()
+    response = await adapter.create_subscription("webhook_123", body=req)
+
+    assert response.data.subscribed is True
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_get_subscriptions_success(x_config, http_client, mock_logger):
+    """Test that get_subscriptions correctly calls GET."""
+    respx.get("https://api.x.com/2/account_activity/webhooks/webhook_123/subscriptions/all/list").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": {
+                    "application_id": "app_123",
+                    "webhook_id": "webhook_123",
+                    "webhook_url": "https://example.com/webhook",
+                    "subscriptions": [{"user_id": "user_456"}],
+                }
+            },
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    response = await adapter.get_subscriptions("webhook_123")
+
+    assert response.data.application_id == "app_123"
+    assert len(response.data.subscriptions) == 1
+    assert response.data.subscriptions[0]["user_id"] == "user_456"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_delete_subscription_success(x_config, http_client, mock_logger):
+    """Test that delete_subscription correctly calls DELETE."""
+    respx.delete("https://api.x.com/2/account_activity/webhooks/webhook_123/subscriptions/user_456/all").mock(
+        return_value=Response(200, json={"data": {"subscribed": False}})
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    response = await adapter.delete_subscription("webhook_123", "user_456")
+
+    assert response.data.subscribed is False
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_get_subscription_count_success(x_config, http_client, mock_logger):
+    """Test that get_subscription_count correctly calls GET."""
+    respx.get("https://api.x.com/2/account_activity/subscriptions/count").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": {
+                    "account_name": "AcmeCorp",
+                    "subscriptions_count_all": "100",
+                    "provisioned_count": "500",
+                    "subscriptions_count_direct_messages": "50",
+                }
+            },
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    response = await adapter.get_subscription_count()
+
+    assert response.data.account_name == "AcmeCorp"
+    assert response.data.subscriptions_count_all == "100"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_create_replay_job_success(x_config, http_client, mock_logger):
+    """Test that create_replay_job correctly calls POST with parameters."""
+    route = respx.post("https://api.x.com/2/account_activity/replay/webhooks/webhook_123/subscriptions/all").mock(
+        return_value=Response(201, json={"job_id": "replay_job_999", "created_at": "2023-10-27T12:00:00Z"})
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    response = await adapter.create_replay_job("webhook_123", "202310221200", "202310271200")
+
+    assert response.job_id == "replay_job_999"
+    assert route.called
+    assert "from_date=202310221200" in str(route.calls.last.request.url)
+    assert "to_date=202310271200" in str(route.calls.last.request.url)
 
 
