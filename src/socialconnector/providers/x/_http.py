@@ -103,9 +103,16 @@ class XHttpMixin:
 
         for attempt in range(1, self.MAX_RETRIES_ON_429 + 1):
             if current_strategy == "oauth1":
-                auth = self.auth.auth
+                # Build OAuth1 Authorization header manually.
+                # authlib's httpx OAuth1Auth integration corrupts JSON POST
+                # bodies, so we sign the request ourselves and pass the
+                # Authorization header explicitly.
+                oauth_headers = self.auth.build_header(method, url)
+                merged_headers = dict(headers) if headers else {}
+                merged_headers.update(oauth_headers)
                 response = await self.http_client.request(
-                    method, url, data=data, json=json, params=params, headers=headers, auth=auth, files=files
+                    method, url, data=data, json=json, params=params,
+                    headers=merged_headers, files=files,
                 )
             else:
                 token = await self.bearer_token_manager.get()

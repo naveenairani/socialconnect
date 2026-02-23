@@ -29,8 +29,21 @@ class AdapterFactory:
 
         adapter_cls = registry.get(provider)
 
-        # Create config
-        adapter_config = AdapterConfig(provider=provider, **config_kwargs)
+        # Separate known AdapterConfig fields from provider-specific extras.
+        # This lets callers pass access_token, bearer_token, etc. directly
+        # instead of wrapping them in an explicit extra={...} dict.
+        known_fields = set(AdapterConfig.model_fields.keys())
+        config_args: dict[str, Any] = {}
+        extra: dict[str, Any] = dict(config_kwargs.pop("extra", {}))
+
+        for key, value in config_kwargs.items():
+            if key in known_fields:
+                config_args[key] = value
+            else:
+                extra[key] = value
+
+        # Create config with extras merged
+        adapter_config = AdapterConfig(provider=provider, extra=extra, **config_args)
 
         # Initialize logger for this provider
         logger = get_logger(f"socialconnector.providers.{provider}")

@@ -7,7 +7,53 @@ The `XAdapter` provides a comprehensive integration with the X API v2 (and v1.1 
 X supports two primary authentication modes:
 
 1. **OAuth 1.0a (User Context)**: Required for POST/DELETE actions (tweets, likes, DMs) and accessing private user data. Requires `api_key`, `api_secret`, `access_token`, and `access_token_secret`.
-2. **OAuth 2.0 (App-only)**: Used for read-only access to public data. Requires `api_key` and `api_secret`.
+2. **OAuth 2.0 (App-only)**: Used for read-only access to public data. Requires `api_key` and `api_secret` (a bearer token will be obtained automatically, or you can supply one via `bearer_token`).
+
+### Configuration
+
+All authentication parameters can be passed directly to `SocialConnector` — the factory automatically routes provider-specific fields like `access_token` and `bearer_token` into the adapter:
+
+```python
+from socialconnector import SocialConnector
+
+sc = SocialConnector(
+    provider="x",
+    api_key="YOUR_API_KEY",
+    api_secret="YOUR_API_SECRET",
+    access_token="YOUR_ACCESS_TOKEN",
+    access_token_secret="YOUR_ACCESS_TOKEN_SECRET",
+    bearer_token="YOUR_BEARER_TOKEN",  # optional
+)
+```
+
+### Environment Variables (`.env`)
+
+```env
+TWITTER_API_KEY=...
+TWITTER_API_SECRET=...
+TWITTER_ACCESS_TOKEN=...
+TWITTER_ACCESS_TOKEN_SECRET=...
+TWITTER_BEARER_TOKEN=...          # optional
+TWITTER_CLIENT_ID=...             # for future OAuth 2.0 PKCE
+TWITTER_CLIENT_SECRET=...         # for future OAuth 2.0 PKCE
+```
+
+```python
+import os
+from dotenv import load_dotenv
+from socialconnector import SocialConnector
+
+load_dotenv()
+
+sc = SocialConnector(
+    provider="x",
+    api_key=os.getenv("TWITTER_API_KEY"),
+    api_secret=os.getenv("TWITTER_API_SECRET"),
+    access_token=os.getenv("TWITTER_ACCESS_TOKEN"),
+    access_token_secret=os.getenv("TWITTER_ACCESS_TOKEN_SECRET"),
+    bearer_token=os.getenv("TWITTER_BEARER_TOKEN"),
+)
+```
 
 ## Supported Features
 
@@ -71,27 +117,44 @@ X supports two primary authentication modes:
 ## Usage Example
 
 ```python
+import asyncio
+import os
+from dotenv import load_dotenv
 from socialconnector import SocialConnector
 
-sc = SocialConnector(
-    provider="x",
-    api_key="...",
-    api_secret="...",
-    access_token="...",
-    access_token_secret="..."
-)
+load_dotenv()
 
 async def main():
+    sc = SocialConnector(
+        provider="x",
+        api_key=os.getenv("TWITTER_API_KEY"),
+        api_secret=os.getenv("TWITTER_API_SECRET"),
+        access_token=os.getenv("TWITTER_ACCESS_TOKEN"),
+        access_token_secret=os.getenv("TWITTER_ACCESS_TOKEN_SECRET"),
+    )
+
     await sc.connect()
 
     # Post a tweet
-    await sc.post("Hello from SocialConnect!")
+    result = await sc.post("Hello from SocialConnect!")
+    print(f"Tweet ID: {result.message_id}")
 
     # Like a tweet (provider-specific method)
     await sc.adapter.like_tweet(user_id="123", tweet_id="456")
-    
+
     await sc.disconnect()
+
+asyncio.run(main())
 ```
+
+## Free Tier Limitations
+
+The X API free tier includes:
+- **Post creation** (`POST /2/tweets`) — 1,500 tweets/month
+- **Post deletion** (`DELETE /2/tweets/:id`)
+- **User lookup** (`GET /2/users/me`)
+
+Rate limiting is handled automatically. The adapter paces requests (1s minimum interval) and retries on 429 responses with exponential backoff.
 
 ## Scopes Required
 
@@ -104,4 +167,4 @@ Ensure your X App has the following permissions enabled in the Developer Portal:
 - `bookmark.read`, `bookmark.write`
 - `list.read`, `list.write`
 - `dm.read`, `dm.write` (for DMs)
-- `offline.access` (if using OAuth 2.0 PKCE - future)
+- `offline.access` (if using OAuth 2.0 PKCE — future)

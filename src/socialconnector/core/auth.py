@@ -104,6 +104,28 @@ class OAuth1Auth(AuthProvider):
             token_secret=self.resource_owner_secret,
         )
 
+    def build_header(self, method: str, url: str) -> dict[str, str]:
+        """Build the OAuth1 Authorization header manually.
+
+        This avoids authlib's httpx integration which corrupts JSON POST
+        bodies. Per the OAuth1 spec, JSON bodies are NOT included in
+        the signature base string.
+        """
+        from authlib.oauth1 import SIGNATURE_HMAC_SHA1, SIGNATURE_TYPE_HEADER
+        from authlib.oauth1.rfc5849 import ClientAuth
+
+        client_auth = ClientAuth(
+            client_id=self.client_key,
+            client_secret=self.client_secret,
+            token=self.resource_owner_key,
+            token_secret=self.resource_owner_secret,
+            signature_method=SIGNATURE_HMAC_SHA1,
+            signature_type=SIGNATURE_TYPE_HEADER,
+        )
+        # body="" because JSON bodies must be excluded from OAuth1 signature
+        _, headers, _ = client_auth.sign(method.upper(), url, body="", headers={})
+        return headers
+
     def get_auth_token(self, method: str, url: str, body: Any = None) -> str:
         """Not used for httpx integration, but kept for compatibility."""
         return ""
