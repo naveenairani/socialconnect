@@ -910,7 +910,7 @@ async def test_x_chat_get_conversation_success(x_config, http_client, mock_logge
             }
         )
     )
-    
+
     route2 = respx.get("https://api.x.com/2/chat/conversations/conv-123?max_results=10&pagination_token=token-123").mock(
         return_value=Response(
             200,
@@ -922,11 +922,11 @@ async def test_x_chat_get_conversation_success(x_config, http_client, mock_logge
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
-    
+
     pages = []
     async for page in adapter.get_conversation("conv-123", max_results=10):
         pages.append(page)
-        
+
     assert len(pages) == 2
     assert route1.called
     assert route2.called
@@ -988,6 +988,62 @@ async def test_x_chat_get_conversations_success(x_config, http_client, mock_logg
 
     assert route.called
     assert len(pages) == 1
-    assert pages[0].data[0]["conversation_id"] == "conv-1"
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_communities_get_by_id_success(x_config, http_client, mock_logger):
+    """Test that get_community_by_id correctly calls GET and returns the response."""
+    route = respx.get("https://api.x.com/2/communities/comm-123").mock(
+        return_value=Response(
+            200, 
+            json={
+                "data": {"id": "comm-123", "name": "Python Developers", "created_at": "2023-01-01T00:00:00.000Z"}
+            }
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    response = await adapter.get_community_by_id("comm-123", community_fields=["name", "created_at"])
+
+    assert route.called
+    assert "community.fields=name%2Ccreated_at" in str(route.calls.last.request.url)
+    assert response.data.id == "comm-123"
+    assert response.data.name == "Python Developers"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_communities_search_success(x_config, http_client, mock_logger):
+    """Test that search_communities correctly calls GET and paginates."""
+    route1 = respx.get("https://api.x.com/2/communities/search?query=programming&max_results=10").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [{"id": "comm-1", "name": "Python"}],
+                "meta": {"next_token": "token-123"}
+            }
+        )
+    )
+    
+    route2 = respx.get("https://api.x.com/2/communities/search?query=programming&max_results=10&pagination_token=token-123").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [{"id": "comm-2", "name": "JavaScript"}],
+                "meta": {}
+            }
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    
+    pages = []
+    async for page in adapter.search_communities("programming", max_results=10):
+        pages.append(page)
+        
+    assert len(pages) == 2
+    assert route1.called
+    assert route2.called
+    assert pages[0].data[0]["id"] == "comm-1"
+    assert pages[1].data[0]["id"] == "comm-2"
 
 

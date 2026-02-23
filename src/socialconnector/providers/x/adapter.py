@@ -13,6 +13,7 @@ from socialconnector.core.models import AdapterConfig, HealthStatus, WebhookConf
 from ._account_activity import XAccountActivityMixin
 from ._auth import BearerTokenManager
 from ._chat import XChatMixin
+from ._communities import XCommunitiesMixin
 from ._compliance import XComplianceMixin
 from ._dms import XDmsMixin
 from ._http import XHttpMixin
@@ -34,6 +35,7 @@ class XAdapter(
     XNotesMixin,
     XAccountActivityMixin,
     XChatMixin,
+    XCommunitiesMixin,
     BaseAdapter,
 ):
     """X (formerly Twitter) adapter using API v2."""
