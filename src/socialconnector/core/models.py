@@ -198,6 +198,15 @@ class StreamRule(BaseModel):
     tag: str | None = None
 
 
+class StreamResponse(BaseModel):
+    """Raw data yielded from a streaming endpoint."""
+    data: dict[str, Any] | None = None
+    includes: dict[str, Any] | None = None
+    errors: list[Any] | None = None
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
 class PaginatedResult(BaseModel):
     """Wrapper for paginated API responses."""
 
@@ -249,6 +258,24 @@ class CreateSubscriptionResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
 
+class UpdateSubscriptionRequest(BaseModel):
+    """Request model for update_subscription"""
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class UpdateSubscriptionResponseData(BaseModel):
+    """Nested model for UpdateSubscriptionResponseData"""
+    subscribed: bool | None = None
+
+
+class UpdateSubscriptionResponse(BaseModel):
+    """Response model for update_subscription"""
+    data: UpdateSubscriptionResponseData | None = None
+    errors: list[Any] | None = None
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
 class GetSubscriptionsResponseData(BaseModel):
     """Nested model for GetSubscriptionsResponseData"""
     application_id: str | None = None
@@ -264,6 +291,7 @@ class GetSubscriptionsResponse(BaseModel):
         default_factory=lambda: GetSubscriptionsResponseData(),
     )
     errors: list[Any] | None = None
+    meta: "PageInfo | None" = None
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 

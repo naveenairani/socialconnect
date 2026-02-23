@@ -1047,3 +1047,120 @@ async def test_x_communities_search_success(x_config, http_client, mock_logger):
     assert pages[1].data[0]["id"] == "comm-2"
 
 
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_update_subscription_success(x_config, http_client, mock_logger):
+    """Test that update_subscription correctly calls PUT."""
+    from socialconnector.core.models import UpdateSubscriptionRequest
+
+    respx.put("https://api.x.com/2/activity/subscriptions/sub_123").mock(
+        return_value=Response(200, json={"data": {"subscribed": True}})
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    req = UpdateSubscriptionRequest()
+    response = await adapter.update_subscription("sub_123", body=req)
+
+    assert response.data.subscribed is True
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_create_activity_subscription_success(x_config, http_client, mock_logger):
+    """Test that create_activity_subscription correctly calls POST on activity/subscriptions."""
+    from socialconnector.core.models import CreateSubscriptionRequest
+
+    respx.post("https://api.x.com/2/activity/subscriptions").mock(
+        return_value=Response(200, json={"data": {"subscribed": True}})
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    req = CreateSubscriptionRequest()
+    response = await adapter.create_activity_subscription(body=req)
+
+    assert response.data.subscribed is True
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_delete_activity_subscription_success(x_config, http_client, mock_logger):
+    """Test that delete_activity_subscription correctly calls DELETE on activity/subscriptions."""
+    respx.delete("https://api.x.com/2/activity/subscriptions/sub_456").mock(
+        return_value=Response(200, json={"data": {"subscribed": False}})
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    response = await adapter.delete_activity_subscription("sub_456")
+
+    assert response.data.subscribed is False
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_get_activity_subscriptions_success(x_config, http_client, mock_logger):
+    """Test that get_activity_subscriptions correctly paginates and calls GET on activity/subscriptions."""
+    respx.get("https://api.x.com/2/activity/subscriptions").mock(
+        side_effect=[
+            Response(200, json={"data": {"application_id": "app_1", "subscriptions": [{"id": "sub_1"}]}, "meta": {"next_token": "token_1"}}),
+            Response(200, json={"data": {"application_id": "app_1", "subscriptions": [{"id": "sub_2"}]}}),
+        ]
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    
+    pages = []
+    async for page in adapter.get_activity_subscriptions(max_results=1):
+        pages.append(page)
+
+    assert len(pages) == 2
+    assert pages[0].meta.next_token == "token_1"
+    assert pages[1].meta is None
+
+
+@pytest.mark.asyncio
+async def test_x_activity_stream_success(x_config, http_client, mock_logger):
+    """Test that stream correctly yields StreamResponse objects using stream_with_retry."""
+    import json
+    from httpx import Response
+    from socialconnector.core.models import StreamResponse
+
+    # Note: respx doesn't easily mock async streams using stream_with_retry,
+    # so we mock httpx.AsyncClient.stream instead
+    class MockStreamContext:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+        @property
+        def status_code(self):
+            return 200
+
+        async def aiter_text(self):
+            yield json.dumps({"data": {"id": "act_1", "text": "Activity 1"}}) + "\n"
+            yield json.dumps({"data": {"id": "act_2", "text": "Activity 2"}}) + "\n"
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    adapter._last_request_time = 0  # disable rate limits
+    
+    # Mock token method
+    async def mock_get_token():
+        return "mock_token"
+    adapter.bearer_token_manager.get = mock_get_token
+
+    # Mock the actual stream method from http_client
+    adapter.http_client.stream = lambda *args, **kwargs: MockStreamContext()
+    
+    from socialconnector.core.streaming import StreamConfig
+
+    events = []
+    async for event in adapter.stream(backfill_minutes=5):
+        events.append(event)
+        if len(events) == 2:
+            break
+        
+    assert len(events) == 2
+    assert isinstance(events[0], StreamResponse)
+    assert events[0].data["id"] == "act_1"
+    assert events[1].data["id"] == "act_2"
