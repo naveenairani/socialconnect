@@ -1504,3 +1504,23 @@ async def test_x_dms_get_events(x_config, http_client, mock_logger):
         assert page.data[0]["text"] == "msg2"
         count += 1
     assert count == 1
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_general_get_open_api_spec(x_config, http_client, mock_logger):
+    respx.get("https://api.x.com/2/openapi.json").mock(
+        return_value=Response(
+            200,
+            json={
+                "openapi": "3.0.0",
+                "info": {"title": "X API v2", "version": "2.0"},
+                "paths": {},
+            },
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    res = await adapter.get_open_api_spec()
+    assert getattr(res, "openapi", None) == "3.0.0" or res.model_dump().get("openapi") == "3.0.0"
+

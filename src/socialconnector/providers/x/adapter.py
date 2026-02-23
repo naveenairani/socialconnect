@@ -17,6 +17,7 @@ from ._communities import XCommunitiesMixin
 from ._compliance import XComplianceMixin
 from ._connections import XConnectionsMixin
 from ._dms import XDmsMixin
+from ._general import XGeneralMixin
 from ._http import XHttpMixin
 from ._media import XMediaMixin
 from ._notes import XNotesMixin
@@ -38,6 +39,7 @@ class XAdapter(
     XChatMixin,
     XCommunitiesMixin,
     XConnectionsMixin,
+    XGeneralMixin,
     BaseAdapter,
 ):
     """X (formerly Twitter) adapter using API v2."""
