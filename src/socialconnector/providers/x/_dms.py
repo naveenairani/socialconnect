@@ -2,10 +2,26 @@
 X Direct Messages Mixin for managing conversations and messages.
 """
 
+from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Any
 
-from socialconnector.core.models import Message, MessageResponse, UserInfo
+from socialconnector.core.models import (
+    CreateByConversationIdRequest,
+    CreateByConversationIdResponse,
+    CreateByParticipantIdRequest,
+    CreateByParticipantIdResponse,
+    CreateConversationRequest,
+    CreateConversationResponse,
+    DeleteEventsResponse,
+    GetEventsByConversationIdResponse,
+    GetEventsByIdResponse,
+    GetEventsByParticipantIdResponse,
+    GetEventsResponse,
+    Message,
+    MessageResponse,
+    UserInfo,
+)
 
 
 class XDmsMixin:
@@ -111,3 +127,232 @@ class XDmsMixin:
                 )
             )
         return messages
+
+    # --- Direct Messages REST API v2 ---
+
+    async def get_events_by_participant_id(
+        self,
+        participant_id: str,
+        max_results: int | None = None,
+        pagination_token: str | None = None,
+        event_types: list[str] | None = None,
+        dm_event_fields: list[str] | None = None,
+        expansions: list[str] | None = None,
+        media_fields: list[str] | None = None,
+        user_fields: list[str] | None = None,
+        tweet_fields: list[str] | None = None,
+    ) -> AsyncGenerator[GetEventsByParticipantIdResponse, None]:
+        """
+        Get DM events for a DM conversation
+        Retrieves direct message events for a specific conversation.
+        Runs automatically handling pagination.
+        """
+        pid = self._validate_path_param("participant_id", participant_id)
+        path = f"dm_conversations/with/{pid}/dm_events"
+
+        current_token = pagination_token
+        while True:
+            params: dict[str, Any] = {}
+            if max_results is not None:
+                params["max_results"] = max_results
+            if event_types is not None:
+                params["event_types"] = ",".join(str(item) for item in event_types)
+            if dm_event_fields is not None:
+                params["dm_event.fields"] = ",".join(str(item) for item in dm_event_fields)
+            if expansions is not None:
+                params["expansions"] = ",".join(str(item) for item in expansions)
+            if media_fields is not None:
+                params["media.fields"] = ",".join(str(item) for item in media_fields)
+            if user_fields is not None:
+                params["user.fields"] = ",".join(str(item) for item in user_fields)
+            if tweet_fields is not None:
+                params["tweet.fields"] = ",".join(str(item) for item in tweet_fields)
+            if current_token:
+                params["pagination_token"] = current_token
+
+            res = await self._request("GET", path, params=params, auth_type="oauth2_user_context")
+            page_res = GetEventsByParticipantIdResponse.model_validate(res)
+            yield page_res
+
+            next_token = None
+            if page_res.meta and page_res.meta.next_token:
+                next_token = page_res.meta.next_token
+
+            if not next_token:
+                break
+            current_token = next_token
+
+    async def get_events_by_conversation_id(
+        self,
+        id: str,
+        max_results: int | None = None,
+        pagination_token: str | None = None,
+        event_types: list[str] | None = None,
+        dm_event_fields: list[str] | None = None,
+        expansions: list[str] | None = None,
+        media_fields: list[str] | None = None,
+        user_fields: list[str] | None = None,
+        tweet_fields: list[str] | None = None,
+    ) -> AsyncGenerator[GetEventsByConversationIdResponse, None]:
+        """
+        Get DM events for a DM conversation
+        Retrieves direct message events for a specific conversation.
+        """
+        conv_id = self._validate_path_param("id", id)
+        path = f"dm_conversations/{conv_id}/dm_events"
+
+        current_token = pagination_token
+        while True:
+            params: dict[str, Any] = {}
+            if max_results is not None:
+                params["max_results"] = max_results
+            if event_types is not None:
+                params["event_types"] = ",".join(str(item) for item in event_types)
+            if dm_event_fields is not None:
+                params["dm_event.fields"] = ",".join(str(item) for item in dm_event_fields)
+            if expansions is not None:
+                params["expansions"] = ",".join(str(item) for item in expansions)
+            if media_fields is not None:
+                params["media.fields"] = ",".join(str(item) for item in media_fields)
+            if user_fields is not None:
+                params["user.fields"] = ",".join(str(item) for item in user_fields)
+            if tweet_fields is not None:
+                params["tweet.fields"] = ",".join(str(item) for item in tweet_fields)
+            if current_token:
+                params["pagination_token"] = current_token
+
+            res = await self._request("GET", path, params=params, auth_type="oauth2_user_context")
+            page_res = GetEventsByConversationIdResponse.model_validate(res)
+            yield page_res
+
+            next_token = None
+            if page_res.meta and page_res.meta.next_token:
+                next_token = page_res.meta.next_token
+
+            if not next_token:
+                break
+            current_token = next_token
+
+    async def get_events_by_id(
+        self,
+        event_id: str,
+        dm_event_fields: list[str] | None = None,
+        expansions: list[str] | None = None,
+        media_fields: list[str] | None = None,
+        user_fields: list[str] | None = None,
+        tweet_fields: list[str] | None = None,
+    ) -> GetEventsByIdResponse:
+        """
+        Get DM event by ID
+        Retrieves details of a specific direct message event by its ID.
+        """
+        eid = self._validate_path_param("event_id", event_id)
+        path = f"dm_events/{eid}"
+        params: dict[str, Any] = {}
+        if dm_event_fields is not None:
+            params["dm_event.fields"] = ",".join(str(item) for item in dm_event_fields)
+        if expansions is not None:
+            params["expansions"] = ",".join(str(item) for item in expansions)
+        if media_fields is not None:
+            params["media.fields"] = ",".join(str(item) for item in media_fields)
+        if user_fields is not None:
+            params["user.fields"] = ",".join(str(item) for item in user_fields)
+        if tweet_fields is not None:
+            params["tweet.fields"] = ",".join(str(item) for item in tweet_fields)
+
+        res = await self._request("GET", path, params=params, auth_type="oauth2_user_context")
+        return GetEventsByIdResponse.model_validate(res)
+
+    async def delete_events(self, event_id: str) -> DeleteEventsResponse:
+        """
+        Delete DM event
+        Deletes a specific direct message event by its ID, if owned by the authenticated user.
+        """
+        eid = self._validate_path_param("event_id", event_id)
+        path = f"dm_events/{eid}"
+        res = await self._request("DELETE", path, auth_type="oauth2_user_context")
+        return DeleteEventsResponse.model_validate(res)
+
+    async def create_conversation(self, body: CreateConversationRequest) -> CreateConversationResponse:
+        """
+        Create DM conversation
+        Initiates a new direct message conversation with specified participants.
+        """
+        path = "dm_conversations"
+        json_data = body.model_dump(exclude_none=True)
+        res = await self._request("POST", path, json=json_data, auth_type="oauth2_user_context")
+        return CreateConversationResponse.model_validate(res)
+
+    async def create_by_conversation_id(
+        self, dm_conversation_id: str, body: CreateByConversationIdRequest
+    ) -> CreateByConversationIdResponse:
+        """
+        Create DM message by conversation ID
+        Sends a new direct message to a specific conversation by its ID.
+        """
+        conv = self._validate_path_param("dm_conversation_id", dm_conversation_id)
+        path = f"dm_conversations/{conv}/messages"
+        json_data = body.model_dump(exclude_none=True)
+        res = await self._request("POST", path, json=json_data, auth_type="oauth2_user_context")
+        return CreateByConversationIdResponse.model_validate(res)
+
+    async def create_by_participant_id(
+        self, participant_id: str, body: CreateByParticipantIdRequest
+    ) -> CreateByParticipantIdResponse:
+        """
+        Create DM message by participant ID
+        Sends a new direct message to a specific participant by their ID.
+        """
+        pid = self._validate_path_param("participant_id", participant_id)
+        path = f"dm_conversations/with/{pid}/messages"
+        json_data = body.model_dump(exclude_none=True)
+        res = await self._request("POST", path, json=json_data, auth_type="oauth2_user_context")
+        return CreateByParticipantIdResponse.model_validate(res)
+
+    async def get_events(
+        self,
+        max_results: int | None = None,
+        pagination_token: str | None = None,
+        event_types: list[str] | None = None,
+        dm_event_fields: list[str] | None = None,
+        expansions: list[str] | None = None,
+        media_fields: list[str] | None = None,
+        user_fields: list[str] | None = None,
+        tweet_fields: list[str] | None = None,
+    ) -> AsyncGenerator[GetEventsResponse, None]:
+        """
+        Get DM events
+        Retrieves a list of recent direct message events across all conversations.
+        """
+        path = "dm_events"
+        current_token = pagination_token
+        while True:
+            params: dict[str, Any] = {}
+            if max_results is not None:
+                params["max_results"] = max_results
+            if event_types is not None:
+                params["event_types"] = ",".join(str(item) for item in event_types)
+            if dm_event_fields is not None:
+                params["dm_event.fields"] = ",".join(str(item) for item in dm_event_fields)
+            if expansions is not None:
+                params["expansions"] = ",".join(str(item) for item in expansions)
+            if media_fields is not None:
+                params["media.fields"] = ",".join(str(item) for item in media_fields)
+            if user_fields is not None:
+                params["user.fields"] = ",".join(str(item) for item in user_fields)
+            if tweet_fields is not None:
+                params["tweet.fields"] = ",".join(str(item) for item in tweet_fields)
+            if current_token:
+                params["pagination_token"] = current_token
+
+            res = await self._request("GET", path, params=params, auth_type="oauth2_user_context")
+            page_res = GetEventsResponse.model_validate(res)
+            yield page_res
+
+            next_token = None
+            if page_res.meta and page_res.meta.next_token:
+                next_token = page_res.meta.next_token
+
+            if not next_token:
+                break
+            current_token = next_token

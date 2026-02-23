@@ -1250,14 +1250,14 @@ async def test_x_get_connection_history_success(x_config, http_client, mock_logg
     respx.get("https://api.x.com/2/connections").mock(
         side_effect=[
             Response(
-                200, 
+                200,
                 json={
                     "data": [{"id": "conn_1", "status": "active"}],
                     "meta": {"next_token": "token_123"}
                 }
             ),
             Response(
-                200, 
+                200,
                 json={
                     "data": [{"id": "conn_2", "status": "inactive"}]
                 }
@@ -1266,7 +1266,7 @@ async def test_x_get_connection_history_success(x_config, http_client, mock_logg
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
-    
+
     pages = []
     async for page in adapter.get_connection_history(status="all", max_results=10):
         pages.append(page)
@@ -1283,7 +1283,7 @@ async def test_x_delete_all_connections_success(x_config, http_client, mock_logg
     """Test delete_all_connections calls correct route."""
     route = respx.delete("https://api.x.com/2/connections/all").mock(
         return_value=Response(
-            200, 
+            200,
             json={"data": {"successful_kills": 5, "failed_kills": 0, "results": []}}
         )
     )
@@ -1301,7 +1301,7 @@ async def test_x_delete_connections_by_endpoint_success(x_config, http_client, m
     """Test delete_connections_by_endpoint calls correct route with ID parameter."""
     route = respx.delete("https://api.x.com/2/connections/endpoint_1").mock(
         return_value=Response(
-            200, 
+            200,
             json={"data": {"successful_kills": 2, "failed_kills": 1, "results": []}}
         )
     )
@@ -1319,10 +1319,10 @@ async def test_x_delete_connections_by_endpoint_success(x_config, http_client, m
 async def test_x_delete_connections_by_uuids_success(x_config, http_client, mock_logger):
     """Test delete_connections_by_uuids properly mounts request payloads."""
     from socialconnector.core.models import DeleteByUuidsRequest
-    
+
     route = respx.delete("https://api.x.com/2/connections").mock(
         return_value=Response(
-            200, 
+            200,
             json={"data": {"successful_kills": 3, "failed_kills": 0, "results": []}}
         )
     )
@@ -1333,3 +1333,174 @@ async def test_x_delete_connections_by_uuids_success(x_config, http_client, mock
 
     assert route.called
     assert response.data.successful_kills == 3
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_dms_get_events_by_participant_id(x_config, http_client, mock_logger):
+    pid = "participant_123"
+    respx.get(f"https://api.x.com/2/dm_conversations/with/{pid}/dm_events").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "id": "e1",
+                        "text": "msg1",
+                        "sender_id": "participant_123",
+                        "created_at": "2023-01-01T00:00:00Z",
+                        "dm_conversation_id": "conv456",
+                    }
+                ]
+            },
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    count = 0
+    async for page in adapter.get_events_by_participant_id(pid, max_results=50):
+        assert page.data and len(page.data) == 1
+        assert page.data[0]["text"] == "msg1"
+        count += 1
+    assert count == 1
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_dms_get_events_by_conversation_id(x_config, http_client, mock_logger):
+    conv_id = "conv456"
+    respx.get(f"https://api.x.com/2/dm_conversations/{conv_id}/dm_events").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "id": "e2",
+                        "text": "msg2",
+                        "sender_id": "participant_456",
+                    }
+                ]
+            },
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    count = 0
+    async for page in adapter.get_events_by_conversation_id(conv_id, max_results=50):
+        assert page.data and len(page.data) == 1
+        assert page.data[0]["text"] == "msg2"
+        count += 1
+    assert count == 1
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_dms_get_events_by_id(x_config, http_client, mock_logger):
+    eid = "e2"
+    respx.get(f"https://api.x.com/2/dm_events/{eid}").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": {
+                    "id": "e2",
+                    "text": "msg2",
+                    "sender_id": "participant_456",
+                }
+            },
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    res = await adapter.get_events_by_id(eid)
+    assert res.data and res.data.id == "e2"
+    assert res.data.text == "msg2"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_dms_delete_events(x_config, http_client, mock_logger):
+    eid = "e2"
+    respx.delete(f"https://api.x.com/2/dm_events/{eid}").mock(
+        return_value=Response(200, json={"data": {"deleted": True}})
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    res = await adapter.delete_events(eid)
+    assert res.data and res.data.deleted is True
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_dms_create_conversation(x_config, http_client, mock_logger):
+    respx.post("https://api.x.com/2/dm_conversations").mock(
+        return_value=Response(201, json={"data": {"dm_conversation_id": "conv456", "dm_event_id": "e1"}})
+    )
+
+    from socialconnector.core.models import CreateConversationRequest
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    req = CreateConversationRequest(conversation_type="Group", message="Hello", participant_ids="111,222")
+    res = await adapter.create_conversation(req)
+    assert res.data and res.data.dm_conversation_id == "conv456"
+    assert res.data.dm_event_id == "e1"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_dms_create_by_conversation_id(x_config, http_client, mock_logger):
+    conv_id = "conv_123"
+    respx.post(f"https://api.x.com/2/dm_conversations/{conv_id}/messages").mock(
+        return_value=Response(201, json={"data": {"dm_conversation_id": conv_id, "dm_event_id": "e1"}})
+    )
+
+    from socialconnector.core.models import CreateByConversationIdRequest
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    req = CreateByConversationIdRequest(text="Hello again")
+    res = await adapter.create_by_conversation_id(conv_id, req)
+    assert res.data and res.data.dm_conversation_id == conv_id
+    assert res.data.dm_event_id == "e1"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_dms_create_by_participant_id(x_config, http_client, mock_logger):
+    pid = "part_123"
+    respx.post(f"https://api.x.com/2/dm_conversations/with/{pid}/messages").mock(
+        return_value=Response(201, json={"data": {"dm_conversation_id": "conv_456", "dm_event_id": "e1"}})
+    )
+
+    from socialconnector.core.models import CreateByParticipantIdRequest
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    req = CreateByParticipantIdRequest(text="Hello again")
+    res = await adapter.create_by_participant_id(pid, req)
+    assert res.data and res.data.dm_conversation_id == "conv_456"
+    assert res.data.dm_event_id == "e1"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_dms_get_events(x_config, http_client, mock_logger):
+    respx.get("https://api.x.com/2/dm_events").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "id": "e2",
+                        "text": "msg2",
+                        "sender_id": "participant_456",
+                    }
+                ]
+            },
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    count = 0
+    async for page in adapter.get_events(max_results=50):
+        assert page.data and len(page.data) == 1
+        assert page.data[0]["text"] == "msg2"
+        count += 1
+    assert count == 1
