@@ -141,29 +141,6 @@ class XUsersMixin:
         # Fix Bug #4: pass auth_type="oauth1" as bookmarks require user context
         return await self._paginate(path, limit=limit, auth_type="oauth1")
 
-    async def create_list(self, name: str, description: str | None = None, private: bool = False) -> str | None:
-        """Create a new list."""
-        path = "lists"
-        data = {"name": name, "private": private}
-        if description:
-            data["description"] = description
-        try:
-            res = await self._request("POST", path, json=data, auth_type="oauth1")
-            return res.get("data", {}).get("id")
-        except Exception as e:
-            self.logger.error(f"Failed to create list {name}: {e}")
-            return None
-
-    async def delete_list(self, list_id: str) -> bool:
-        """Delete a list."""
-        path = f"lists/{self._validate_path_param('list_id', list_id)}"
-        try:
-            res = await self._request("DELETE", path, auth_type="oauth1")
-            return res.get("data", {}).get("deleted", False)
-        except Exception as e:
-            self.logger.error(f"Failed to delete list {list_id}: {e}")
-            return False
-
     async def add_list_member(self, list_id: str, user_id: str) -> bool:
         """Add a member to a list."""
         path = f"lists/{self._validate_path_param('list_id', list_id)}/members"
@@ -184,4 +161,76 @@ class XUsersMixin:
             return True
         except Exception as e:
             self.logger.error(f"Failed to remove user {user_id} from list {list_id}: {e}")
+            return False
+
+    async def get_list_followers(
+        self, list_id: str, *, limit: int = 100,
+        user_fields: list[str] | None = None,
+        expansions: list[str] | None = None,
+        tweet_fields: list[str] | None = None,
+    ) -> PaginatedResult:
+        """Get followers of a list."""
+        path = f"lists/{self._validate_path_param('list_id', list_id)}/followers"
+        fields = [
+            ("user.fields", user_fields),
+            ("expansions", expansions),
+            ("tweet.fields", tweet_fields),
+        ]
+        p = {k: ",".join(v) for k, v in fields if v}
+        return await self._paginate(path, params=p or None, limit=limit)
+
+    async def get_list_by_id(
+        self, list_id: str,
+        list_fields: list[str] | None = None,
+        expansions: list[str] | None = None,
+        user_fields: list[str] | None = None,
+    ) -> dict:
+        """Get a List by its ID."""
+        path = f"lists/{self._validate_path_param('list_id', list_id)}"
+        fields = [
+            ("list.fields", list_fields),
+            ("expansions", expansions),
+            ("user.fields", user_fields),
+        ]
+        p = {k: ",".join(v) for k, v in fields if v}
+        return await self._request("GET", path, params=p or None)
+
+    async def update_list(
+        self,
+        list_id: str,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        private: bool | None = None,
+    ) -> bool:
+        """Update a list's metadata."""
+        path = f"lists/{self._validate_path_param('list_id', list_id)}"
+        data = {k: v for k, v in [("name", name), ("description", description), ("private", private)] if v is not None}
+        if not data:
+            return True
+        try:
+            res = await self._request("PUT", path, json=data, auth_type="oauth1")
+            return res.get("data", {}).get("updated", False)
+        except Exception as e:
+            self.logger.error(f"Failed to update list {list_id}: {e}")
+            return False
+
+    async def create_list(self, name: str, *, description: str | None = None, private: bool | None = None) -> dict:
+        """Create a new list."""
+        data = {k: v for k, v in [("name", name), ("description", description), ("private", private)] if v is not None}
+        try:
+            res = await self._request("POST", "lists", json=data, auth_type="oauth1")
+            return res.get("data", {})
+        except Exception as e:
+            self.logger.error(f"Failed to create list '{name}': {e}")
+            raise
+
+    async def delete_list(self, list_id: str) -> bool:
+        """Delete a list."""
+        path = f"lists/{self._validate_path_param('list_id', list_id)}"
+        try:
+            res = await self._request("DELETE", path, auth_type="oauth1")
+            return res.get("data", {}).get("deleted", False)
+        except Exception as e:
+            self.logger.error(f"Failed to delete list {list_id}: {e}")
             return False

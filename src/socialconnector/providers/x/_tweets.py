@@ -113,10 +113,27 @@ class XTweetsMixin:
         }
         return await self._paginate(path, params, limit=limit)
 
-    async def get_list_tweets(self, list_id: str, *, limit: int = 50) -> PaginatedResult:
+    async def get_list_tweets(
+        self, list_id: str, *, limit: int = 100,
+        tweet_fields: list[str] | None = None,
+        expansions: list[str] | None = None,
+        media_fields: list[str] | None = None,
+        poll_fields: list[str] | None = None,
+        user_fields: list[str] | None = None,
+        place_fields: list[str] | None = None,
+    ) -> PaginatedResult:
         """Get tweets from a list."""
         path = f"lists/{self._validate_path_param('list_id', list_id)}/tweets"
-        return await self._paginate(path, limit=limit)
+        fields = [
+            ("tweet.fields", tweet_fields),
+            ("expansions", expansions),
+            ("media.fields", media_fields),
+            ("poll.fields", poll_fields),
+            ("user.fields", user_fields),
+            ("place.fields", place_fields),
+        ]
+        p = {k: ",".join(v) for k, v in fields if v}
+        return await self._paginate(path, params=p or None, limit=limit)
 
     async def search_tweets(self, query: str, *, limit: int = 50, all_history: bool = False) -> PaginatedResult:
         """Search for tweets. all_history=True requires Academic/Pro tier."""

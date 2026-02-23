@@ -2,8 +2,6 @@
 X General API Mixin for OpenAPI specification retrieval.
 """
 
-from typing import Any
-import urllib.parse
 
 from socialconnector.core.models import GetOpenApiSpecResponse
 

@@ -1519,8 +1519,331 @@ async def test_x_general_get_open_api_spec(x_config, http_client, mock_logger):
             },
         )
     )
-
     adapter = XAdapter(x_config, http_client, mock_logger)
     res = await adapter.get_open_api_spec()
     assert getattr(res, "openapi", None) == "3.0.0" or res.model_dump().get("openapi") == "3.0.0"
 
+
+# ── get_list_followers tests ─────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_list_followers_basic(x_config, http_client, mock_logger):
+    """Returns followers for a list — single page, no pagination."""
+    respx.get("https://api.x.com/2/lists/list123/followers").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [
+                    {"id": "u1", "name": "Alice", "username": "alice"},
+                    {"id": "u2", "name": "Bob",   "username": "bob"},
+                ],
+                "meta": {"result_count": 2},
+            },
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.get_list_followers("list123")
+
+    assert result.result_count == 2
+    assert result.data[0]["id"] == "u1"
+    assert result.data[1]["username"] == "bob"
+    assert result.next_token is None
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_list_followers_pagination(x_config, http_client, mock_logger):
+    """Automatically follows next_token across two pages."""
+    pages = [
+        {
+            "data": [{"id": "u1", "name": "Alice", "username": "alice"}],
+            "meta": {"result_count": 1, "next_token": "tok_page2"},
+        },
+        {
+            "data": [{"id": "u2", "name": "Bob", "username": "bob"}],
+            "meta": {"result_count": 1},
+        },
+    ]
+    call_count = 0
+
+    def side_effect(request):
+        nonlocal call_count
+        data = pages[min(call_count, len(pages) - 1)]
+        call_count += 1
+        return Response(200, json=data)
+
+    respx.get("https://api.x.com/2/lists/list456/followers").mock(side_effect=side_effect)
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.get_list_followers("list456", limit=200)
+
+    assert len(result.data) == 2
+    assert result.data[0]["id"] == "u1"
+    assert result.data[1]["id"] == "u2"
+    assert call_count == 2
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_list_followers_invalid_list_id(x_config, http_client, mock_logger):
+    """Rejects malicious / traversal list IDs before making any HTTP call."""
+    from socialconnector.core.exceptions import SocialConnectorError
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+
+    with pytest.raises(SocialConnectorError) as exc:
+        await adapter.get_list_followers("../../etc/passwd")
+
+    assert "Invalid path parameter" in str(exc.value)
+
+
+# ── get_list_tweets tests ────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_list_tweets_basic(x_config, http_client, mock_logger):
+    """Returns tweets for a list — single page, no pagination."""
+    respx.get("https://api.x.com/2/lists/list789/tweets").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [
+                    {"id": "t1", "text": "Hello world", "author_id": "u1"},
+                    {"id": "t2", "text": "Second tweet", "author_id": "u2"},
+                ],
+                "meta": {"result_count": 2},
+            },
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.get_list_tweets("list789")
+
+    assert result.result_count == 2
+    assert result.data[0]["id"] == "t1"
+    assert result.data[1]["text"] == "Second tweet"
+    assert result.next_token is None
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_list_tweets_field_params(x_config, http_client, mock_logger):
+    """Verifies that field params are forwarded correctly to the API."""
+    route = respx.get(
+        "https://api.x.com/2/lists/list789/tweets",
+        params={
+            "tweet.fields": "created_at,public_metrics",
+            "expansions": "author_id",
+            "user.fields": "name,username",
+            "max_results": 100,
+        },
+    ).mock(
+        return_value=Response(
+            200,
+            json={"data": [{"id": "t1", "text": "Hi"}], "meta": {"result_count": 1}},
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    await adapter.get_list_tweets(
+        "list789",
+        tweet_fields=["created_at", "public_metrics"],
+        expansions=["author_id"],
+        user_fields=["name", "username"],
+    )
+
+    assert route.called
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_list_tweets_invalid_list_id(x_config, http_client, mock_logger):
+    """Rejects malicious / traversal list IDs before making any HTTP call."""
+    from socialconnector.core.exceptions import SocialConnectorError
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+
+    with pytest.raises(SocialConnectorError) as exc:
+        await adapter.get_list_tweets("../../etc/passwd")
+
+    assert "Invalid path parameter" in str(exc.value)
+
+
+# ── get_list_by_id tests ─────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_list_by_id_basic(x_config, http_client, mock_logger):
+    """Returns list metadata by ID."""
+    respx.get("https://api.x.com/2/lists/list123").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": {
+                    "id": "list123",
+                    "name": "My List",
+                    "owner_id": "u1",
+                    "private": False,
+                }
+            },
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.get_list_by_id("list123")
+
+    assert result["data"]["id"] == "list123"
+    assert result["data"]["name"] == "My List"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_list_by_id_invalid_id(x_config, http_client, mock_logger):
+    """Rejects malicious list IDs before making any HTTP call."""
+    from socialconnector.core.exceptions import SocialConnectorError
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+
+    with pytest.raises(SocialConnectorError) as exc:
+        await adapter.get_list_by_id("../../etc/passwd")
+
+    assert "Invalid path parameter" in str(exc.value)
+
+
+# ── update_list tests ────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_update_list_basic(x_config, http_client, mock_logger):
+    """Updates list metadata successfully."""
+    route = respx.put("https://api.x.com/2/lists/list123").mock(
+        return_value=Response(200, json={"data": {"updated": True}})
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.update_list(
+        "list123", name="New Name", description="Updated description", private=True
+    )
+
+    import json
+    assert result is True
+    assert route.called
+    req_json = json.loads(route.calls[0].request.content)
+    assert req_json["name"] == "New Name"
+    assert req_json["description"] == "Updated description"
+    assert req_json["private"] is True
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_update_list_invalid_id(x_config, http_client, mock_logger):
+    """Rejects malicious list IDs before making any HTTP call."""
+    from socialconnector.core.exceptions import SocialConnectorError
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+
+    with pytest.raises(SocialConnectorError) as exc:
+        await adapter.update_list("../../etc/passwd", name="Hack")
+
+    assert "Invalid path parameter" in str(exc.value)
+
+
+# ── delete_list tests ────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_delete_list_basic(x_config, http_client, mock_logger):
+    """Deletes list successfully."""
+    route = respx.delete("https://api.x.com/2/lists/list123").mock(
+        return_value=Response(200, json={"data": {"deleted": True}})
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.delete_list("list123")
+
+    assert result is True
+    assert route.called
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_delete_list_invalid_id(x_config, http_client, mock_logger):
+    """Rejects malicious list IDs before making any HTTP call."""
+    from socialconnector.core.exceptions import SocialConnectorError
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+
+    with pytest.raises(SocialConnectorError) as exc:
+        await adapter.delete_list("../../etc/passwd")
+
+    assert "Invalid path parameter" in str(exc.value)
+
+
+# ── add_list_member tests ────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_add_list_member_basic(x_config, http_client, mock_logger):
+    """Adds member to list successfully."""
+    route = respx.post("https://api.x.com/2/lists/list123/members").mock(
+        return_value=Response(200, json={"data": {"is_member": True}})
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.add_list_member("list123", "u999")
+
+    assert result is True
+    assert route.called
+
+    import json
+    req_json = json.loads(route.calls[0].request.content)
+    assert req_json["user_id"] == "u999"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_add_list_member_invalid_id(x_config, http_client, mock_logger):
+    """Rejects malicious list IDs before making any HTTP call."""
+    from socialconnector.core.exceptions import SocialConnectorError
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+
+    with pytest.raises(SocialConnectorError) as exc:
+        await adapter.add_list_member("../../etc/passwd", "u999")
+
+    assert "Invalid path parameter" in str(exc.value)
+
+
+# ── create_list tests ────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_list_basic(x_config, http_client, mock_logger):
+    """Creates a new list successfully."""
+    route = respx.post("https://api.x.com/2/lists").mock(
+        return_value=Response(
+            200, json={"data": {"id": "list123", "name": "New List"}}
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    result = await adapter.create_list("New List", description="My desc", private=True)
+
+    assert result["id"] == "list123"
+    assert result["name"] == "New List"
+    assert route.called
+
+    import json
+    req_json = json.loads(route.calls[0].request.content)
+    assert req_json["name"] == "New List"
+    assert req_json["description"] == "My desc"
+    assert req_json["private"] is True
