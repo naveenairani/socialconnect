@@ -142,4 +142,11 @@ class XTweetsMixin:
             "query": query,
             "tweet.fields": "author_id,created_at,conversation_id,in_reply_to_user_id,referenced_tweets,public_metrics",
         }
-        return await self._paginate(path, params, limit=limit)
+        # X recent search requires max_results >= 10; fetch at least 10 and trim locally.
+        requested_limit = max(1, limit)
+        page_limit = max(requested_limit, 10)
+        res = await self._paginate(path, params, limit=page_limit)
+        if requested_limit < page_limit:
+            res.data = res.data[:requested_limit]
+            res.result_count = len(res.data)
+        return res

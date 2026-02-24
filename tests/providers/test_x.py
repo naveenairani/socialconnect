@@ -1,11 +1,12 @@
 import logging
+import time
 
 import pytest
 import respx
 from httpx import AsyncClient, Response
 from pydantic import SecretStr
 
-from socialconnector.core.exceptions import AuthenticationError, RateLimitError
+from socialconnector.core.exceptions import AuthenticationError, RateLimitError, SocialConnectorError
 from socialconnector.core.models import AdapterConfig, Tweet
 from socialconnector.providers.x import XAdapter
 from socialconnector.providers.x._auth import BearerTokenManager
@@ -17,7 +18,11 @@ def x_config():
         provider="x",
         api_key="consumer_key",
         api_secret="consumer_secret",
-        extra={"access_token": "token", "access_token_secret": "token_secret"},
+        extra={
+            "access_token": "token",
+            "access_token_secret": "token_secret",
+            "oauth2_user_access_token": "user_ctx_token",
+        },
     )
 
 
@@ -120,6 +125,32 @@ async def test_x_get_tweet(x_config, http_client, mock_logger):
     tweet = await adapter.get_tweet("12345")
     assert tweet.id == "12345"
     assert tweet.author_id == "999"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_search_tweets_small_limit_uses_api_minimum(x_config, http_client, mock_logger):
+    route = respx.get("https://api.x.com/2/tweets/search/recent").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [
+                    {"id": "1", "text": "a"},
+                    {"id": "2", "text": "b"},
+                    {"id": "3", "text": "c"},
+                ]
+            },
+        )
+    )
+
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    res = await adapter.search_tweets("python", limit=3)
+
+    assert route.called
+    assert len(res.data) == 3
+    assert res.result_count == 3
+    query = route.calls[0].request.url.query.decode("utf-8")
+    assert "max_results=10" in query
 
 
 @pytest.mark.asyncio
@@ -442,14 +473,14 @@ async def test_x_get_compliance_job(x_config, http_client, mock_logger):
 @respx.mock
 async def test_x_upload_compliance_ids(x_config, http_client, mock_logger, tmp_path):
     # Mock the external upload URL
-    respx.put("https://upload.example.com").mock(return_value=Response(200))
+    respx.put("https://bucket.s3.amazonaws.com/upload.txt").mock(return_value=Response(200))
 
     # Create dummy ID file
     id_file = tmp_path / "ids.txt"
     id_file.write_text("123\n456\n")
 
     adapter = XAdapter(x_config, http_client, mock_logger)
-    success = await adapter.upload_compliance_ids("https://upload.example.com", str(id_file))
+    success = await adapter.upload_compliance_ids("https://bucket.s3.amazonaws.com/upload.txt", str(id_file))
     assert success is True
 
 
@@ -457,10 +488,10 @@ async def test_x_upload_compliance_ids(x_config, http_client, mock_logger, tmp_p
 @respx.mock
 async def test_x_download_compliance_results(x_config, http_client, mock_logger):
     # Mock the external download URL
-    respx.get("https://download.example.com").mock(return_value=Response(200, text="123,delete\n456,delete"))
+    respx.get("https://bucket.s3.amazonaws.com/results.txt").mock(return_value=Response(200, text="123,delete\n456,delete"))
 
     adapter = XAdapter(x_config, http_client, mock_logger)
-    results = await adapter.download_compliance_results("https://download.example.com")
+    results = await adapter.download_compliance_results("https://bucket.s3.amazonaws.com/results.txt")
     assert "123,delete" in results
 
 
@@ -1522,6 +1553,177 @@ async def test_x_general_get_open_api_spec(x_config, http_client, mock_logger):
     adapter = XAdapter(x_config, http_client, mock_logger)
     res = await adapter.get_open_api_spec()
     assert getattr(res, "openapi", None) == "3.0.0" or res.model_dump().get("openapi") == "3.0.0"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_request_oauth2_user_context_uses_user_token(http_client, mock_logger):
+    config = AdapterConfig(
+        provider="x",
+        api_key="consumer_key",
+        api_secret="consumer_secret",
+        extra={"oauth2_user_access_token": "user_ctx_token"},
+    )
+    route = respx.get("https://api.x.com/2/dm_events").mock(return_value=Response(200, json={"data": []}))
+
+    adapter = XAdapter(config, http_client, mock_logger)
+    await adapter._request("GET", "dm_events", auth_type="oauth2_user_context")
+
+    assert route.called
+    assert route.calls[0].request.headers["Authorization"] == "Bearer user_ctx_token"
+
+
+@pytest.mark.asyncio
+async def test_x_request_oauth2_user_context_missing_token(x_config, http_client, mock_logger):
+    config = AdapterConfig(provider="x", api_key="consumer_key", api_secret="consumer_secret", extra={})
+    adapter = XAdapter(config, http_client, mock_logger)
+    with pytest.raises(AuthenticationError):
+        await adapter._request("GET", "dm_events", auth_type="oauth2_user_context")
+
+
+@pytest.mark.asyncio
+async def test_x_request_unknown_auth_type_rejected(x_config, http_client, mock_logger):
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    with pytest.raises(SocialConnectorError):
+        await adapter._request("GET", "users/me", auth_type="unknown_mode")
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_request_oauth2_user_context_uses_pkce_configured_token(http_client, mock_logger):
+    config = AdapterConfig(
+        provider="x",
+        api_key="consumer_key",
+        api_secret="consumer_secret",
+        extra={
+            "oauth2_client_id": "cid",
+            "oauth2_redirect_uri": "https://example.com/callback",
+            "oauth2_token": {
+                "access_token": "pkce_token",
+                "refresh_token": "pkce_refresh",
+                "expires_at": time.time() + 3600,
+            },
+        },
+    )
+    route = respx.get("https://api.x.com/2/dm_events").mock(return_value=Response(200, json={"data": []}))
+    adapter = XAdapter(config, http_client, mock_logger)
+
+    await adapter._request("GET", "dm_events", auth_type="oauth2_user_context")
+
+    assert route.called
+    assert route.calls[0].request.headers["Authorization"] == "Bearer pkce_token"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_request_oauth2_user_context_refreshes_expired_pkce_token(http_client, mock_logger):
+    config = AdapterConfig(
+        provider="x",
+        api_key="consumer_key",
+        api_secret="consumer_secret",
+        extra={
+            "oauth2_client_id": "cid",
+            "oauth2_client_secret": "secret",
+            "oauth2_redirect_uri": "https://example.com/callback",
+            "oauth2_token": {
+                "access_token": "expired_token",
+                "refresh_token": "refresh_123",
+                "expires_at": time.time() - 60,
+            },
+        },
+    )
+    respx.post("https://api.x.com/2/oauth2/token").mock(
+        return_value=Response(
+            200,
+            json={
+                "access_token": "refreshed_user_token",
+                "token_type": "Bearer",
+                "expires_in": 7200,
+                "refresh_token": "refresh_456",
+            },
+        )
+    )
+    route = respx.get("https://api.x.com/2/dm_events").mock(return_value=Response(200, json={"data": []}))
+    adapter = XAdapter(config, http_client, mock_logger)
+
+    await adapter._request("GET", "dm_events", auth_type="oauth2_user_context")
+
+    assert route.called
+    assert route.calls[0].request.headers["Authorization"] == "Bearer refreshed_user_token"
+
+
+def test_x_pkce_get_authorization_url_requires_config(x_config, http_client, mock_logger):
+    adapter = XAdapter(x_config, http_client, mock_logger)
+    with pytest.raises(AuthenticationError):
+        adapter.get_oauth2_authorization_url()
+
+
+def test_x_pkce_get_authorization_url_success(http_client, mock_logger):
+    config = AdapterConfig(
+        provider="x",
+        api_key="consumer_key",
+        api_secret="consumer_secret",
+        extra={
+            "oauth2_client_id": "cid",
+            "oauth2_redirect_uri": "https://example.com/callback",
+            "oauth2_scopes": ["users.read", "dm.read"],
+        },
+    )
+    adapter = XAdapter(config, http_client, mock_logger)
+    url = adapter.get_oauth2_authorization_url(state="abc123")
+    assert "https://x.com/i/oauth2/authorize?" in url
+    assert "client_id=cid" in url
+    assert "state=abc123" in url
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_x_pkce_exchange_and_refresh_helpers(http_client, mock_logger):
+    config = AdapterConfig(
+        provider="x",
+        api_key="consumer_key",
+        api_secret="consumer_secret",
+        extra={
+            "oauth2_client_id": "cid",
+            "oauth2_client_secret": "secret",
+            "oauth2_redirect_uri": "https://example.com/callback",
+            "oauth2_scopes": ["users.read"],
+        },
+    )
+    adapter = XAdapter(config, http_client, mock_logger)
+
+    auth_url = adapter.get_oauth2_authorization_url()
+    code_verifier = adapter._oauth2_pkce_flow._code_verifier  # test-only access
+    assert auth_url
+    assert code_verifier
+
+    respx.post("https://api.x.com/2/oauth2/token").mock(
+        side_effect=[
+            Response(
+                200,
+                json={
+                    "access_token": "token_1",
+                    "token_type": "Bearer",
+                    "expires_in": 300,
+                    "refresh_token": "refresh_1",
+                },
+            ),
+            Response(
+                200,
+                json={
+                    "access_token": "token_2",
+                    "token_type": "Bearer",
+                    "expires_in": 300,
+                    "refresh_token": "refresh_2",
+                },
+            ),
+        ]
+    )
+
+    exchanged = await adapter.exchange_oauth2_code("code_123", code_verifier=code_verifier)
+    assert exchanged["access_token"] == "token_1"
+    refreshed = await adapter.refresh_oauth2_user_token()
+    assert refreshed["access_token"] == "token_2"
 
 
 # ── get_list_followers tests ─────────────────────────────────────────────────

@@ -16,5 +16,5 @@ class XGeneralMixin:
         """
         path = "openapi.json"
 
-        res = await self._request("GET", path, auth_type="bearer_token")
+        res = await self._request("GET", path, auth_type="oauth2_app")
         return GetOpenApiSpecResponse.model_validate(res)

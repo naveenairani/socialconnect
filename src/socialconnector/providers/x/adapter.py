@@ -3,12 +3,14 @@ X (formerly Twitter) adapter using API v2.
 Modular implementation composing multiple domain-specific mixins.
 """
 
+import time
 from typing import Any
 
 from socialconnector.core.auth import OAuth1Auth
 from socialconnector.core.base_adapter import BaseAdapter
 from socialconnector.core.exceptions import AuthenticationError, RateLimitError
 from socialconnector.core.models import AdapterConfig, HealthStatus, WebhookConfig
+from socialconnector.core.oauth2_pkce import OAuth2PKCEFlow, OAuth2Token
 
 from ._account_activity import XAccountActivityMixin
 from ._auth import BearerTokenManager
@@ -56,6 +58,11 @@ class XAdapter(
         self.access_token = config.extra.get("access_token")
         self.access_token_secret = config.extra.get("access_token_secret")
         pre_supplied_bearer = config.extra.get("bearer_token")
+        self._oauth2_user_access_token = (
+            config.extra.get("oauth2_user_access_token")
+            or config.extra.get("user_access_token")
+        )
+        self._oauth2_pkce_flow: OAuth2PKCEFlow | None = None
 
         if self.access_token and self.access_token_secret:
             self.auth_strategy = "oauth1"
@@ -77,11 +84,118 @@ class XAdapter(
             logger=self.logger,
             pre_supplied_token=pre_supplied_bearer,
         )
+        self._init_oauth2_user_pkce(config)
 
         # Rate limit tracking
         self._rate_limit_remaining: int | None = None
         self._rate_limit_reset: float = 0
         self._last_request_time: float = 0
+
+    async def _get_oauth2_user_token(self) -> str:
+        """Return a configured OAuth2 user-context access token."""
+        token = self._oauth2_user_access_token
+        if token and isinstance(token, str) and token.strip():
+            return token
+
+        if self._oauth2_pkce_flow and self._oauth2_pkce_flow.token:
+            flow_token = self._oauth2_pkce_flow.token
+            if flow_token.access_token and not flow_token.is_expired:
+                self._oauth2_user_access_token = flow_token.access_token
+                return flow_token.access_token
+
+            if flow_token.refresh_token:
+                refreshed = await self._oauth2_pkce_flow.refresh(self.http_client)
+                self._oauth2_user_access_token = refreshed.access_token
+                return refreshed.access_token
+
+        raise AuthenticationError(
+            "OAuth2 user-context token is required for this endpoint",
+            platform="x",
+        )
+
+    def _invalidate_oauth2_user_token(self) -> None:
+        """Invalidate cached OAuth2 user-context token after a 401."""
+        self._oauth2_user_access_token = None
+        if self._oauth2_pkce_flow and self._oauth2_pkce_flow.token:
+            self._oauth2_pkce_flow.token.access_token = ""
+            self._oauth2_pkce_flow.token.expires_at = 0
+
+    def _init_oauth2_user_pkce(self, config: AdapterConfig) -> None:
+        """Initialize optional OAuth2 PKCE flow for user-context token management."""
+        extra = config.extra
+        client_id = extra.get("oauth2_client_id") or extra.get("client_id")
+        redirect_uri = extra.get("oauth2_redirect_uri") or extra.get("redirect_uri")
+        auth_url = extra.get("oauth2_authorization_url") or "https://x.com/i/oauth2/authorize"
+        token_url = extra.get("oauth2_token_url") or "https://api.x.com/2/oauth2/token"
+        client_secret = extra.get("oauth2_client_secret") or extra.get("client_secret")
+        scopes = extra.get("oauth2_scopes") or extra.get("scopes")
+
+        if isinstance(scopes, str):
+            scopes_list = [s for s in scopes.split() if s]
+        elif isinstance(scopes, list):
+            scopes_list = [str(s) for s in scopes if str(s).strip()]
+        else:
+            scopes_list = []
+
+        if client_id and redirect_uri:
+            self._oauth2_pkce_flow = OAuth2PKCEFlow(
+                client_id=client_id,
+                client_secret=client_secret,
+                redirect_uri=redirect_uri,
+                token_url=token_url,
+                authorization_url=auth_url,
+                scopes=scopes_list,
+            )
+
+            token_dict = extra.get("oauth2_token")
+            if isinstance(token_dict, dict) and token_dict.get("access_token"):
+                expires_in = token_dict.get("expires_in")
+                expires_at = token_dict.get("expires_at")
+                if expires_at is None and isinstance(expires_in, int):
+                    expires_at = time.time() + expires_in
+                self._oauth2_pkce_flow.token = OAuth2Token(
+                    access_token=token_dict["access_token"],
+                    token_type=token_dict.get("token_type", "Bearer"),
+                    expires_in=expires_in,
+                    refresh_token=token_dict.get("refresh_token"),
+                    scope=token_dict.get("scope"),
+                    expires_at=expires_at,
+                )
+                if not self._oauth2_user_access_token and not self._oauth2_pkce_flow.token.is_expired:
+                    self._oauth2_user_access_token = token_dict["access_token"]
+
+    def get_oauth2_authorization_url(self, state: str | None = None) -> str:
+        """Return OAuth2 PKCE authorization URL for user-context flows."""
+        if not self._oauth2_pkce_flow:
+            raise AuthenticationError(
+                "OAuth2 PKCE is not configured (set oauth2_client_id and oauth2_redirect_uri).",
+                platform="x",
+            )
+        return self._oauth2_pkce_flow.get_authorization_url(state)
+
+    async def exchange_oauth2_code(self, code: str, code_verifier: str | None = None) -> dict[str, Any]:
+        """Exchange OAuth2 authorization code for user token and cache it."""
+        if not self._oauth2_pkce_flow:
+            raise AuthenticationError(
+                "OAuth2 PKCE is not configured (set oauth2_client_id and oauth2_redirect_uri).",
+                platform="x",
+            )
+        token = await self._oauth2_pkce_flow.exchange_code(
+            code=code, http_client=self.http_client, code_verifier=code_verifier
+        )
+        self._oauth2_user_access_token = token.access_token
+        return token.to_dict()
+
+    async def refresh_oauth2_user_token(self) -> dict[str, Any]:
+        """Refresh OAuth2 user token using PKCE refresh token."""
+        if not self._oauth2_pkce_flow:
+            raise AuthenticationError(
+                "OAuth2 PKCE is not configured (set oauth2_client_id and oauth2_redirect_uri).",
+                platform="x",
+            )
+        token = await self._oauth2_pkce_flow.refresh(self.http_client)
+        self._oauth2_user_access_token = token.access_token
+        return token.to_dict()
 
     async def connect(self) -> None:
         """Validate credentials."""

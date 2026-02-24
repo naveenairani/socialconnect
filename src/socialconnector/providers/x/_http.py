@@ -6,6 +6,7 @@ import asyncio
 import re
 import time
 from typing import Any
+import urllib.parse
 from urllib.parse import urlparse
 
 from socialconnector.core.exceptions import RateLimitError, SocialConnectorError
@@ -39,6 +40,23 @@ class XHttpMixin:
     # Basic/Pro tiers: adjust as needed.
     MIN_REQUEST_INTERVAL = 1.0  # seconds
     MAX_RETRIES_ON_429 = 3
+
+    def _normalize_auth_type(self, auth_type: str | None) -> str:
+        """Normalize auth_type aliases to canonical values."""
+        if auth_type is None:
+            return "oauth1" if self.auth_strategy == "oauth1" else "oauth2_app"
+
+        aliases = {
+            "oauth1": "oauth1",
+            "oauth2": "oauth2_app",
+            "oauth2_app": "oauth2_app",
+            "bearer_token": "oauth2_app",
+            "oauth2_user_context": "oauth2_user_context",
+        }
+        normalized = aliases.get(auth_type)
+        if not normalized:
+            raise SocialConnectorError(f"Unsupported auth_type: {auth_type}", platform="x")
+        return normalized
 
     async def _request(
         self,
@@ -79,26 +97,19 @@ class XHttpMixin:
                 # Reset state after sleeping through the window
                 self._rate_limit_remaining = None
         elif self._rate_limit_remaining is not None and self._rate_limit_remaining < 5:
-            # Slow down when near the limit: spread remaining budget across time left
-            reset_at = self._rate_limit_reset
-            now = time.time()
-            time_left = max(reset_at - now, 1)
-            spacing = time_left / max(self._rate_limit_remaining, 1)
-            if spacing > self.MIN_REQUEST_INTERVAL:
-                self.logger.info(
-                    f"Rate limit low ({self._rate_limit_remaining} left) — "
-                    f"pacing requests every {spacing:.1f}s"
-                )
-                async with self._rate_limit_lock:
-                    await asyncio.sleep(spacing)
-                    self._last_request_time = time.time()
+            # Do not proactively sleep for long windows when budget is merely low.
+            # Aligns with XDK behavior: continue and let normal 429 handling/backoff apply.
+            self.logger.info(
+                f"Rate limit low ({self._rate_limit_remaining} left); "
+                "continuing without proactive long sleep"
+            )
 
         # ── 3. Build and sanitize URL ──
         raw_url = path if path.startswith("http") else f"{self.BASE_URL.strip()}/{path.lstrip('/')}"
         url = self._sanitize_url(raw_url)
 
         # ── 4. Execute with 429 retry loop ──
-        current_strategy = auth_type or self.auth_strategy
+        current_strategy = self._normalize_auth_type(auth_type)
         response = None
 
         for attempt in range(1, self.MAX_RETRIES_ON_429 + 1):
@@ -107,12 +118,22 @@ class XHttpMixin:
                 # authlib's httpx OAuth1Auth integration corrupts JSON POST
                 # bodies, so we sign the request ourselves and pass the
                 # Authorization header explicitly.
-                oauth_headers = self.auth.build_header(method, url, params)
+                body = None
+                if data and not files and json is None:
+                    body = urllib.parse.urlencode({k: str(v) for k, v in data.items() if v is not None})
+                oauth_headers = self.auth.build_header(method, url, params, body=body)
                 merged_headers = dict(headers) if headers else {}
                 merged_headers.update(oauth_headers)
                 response = await self.http_client.request(
                     method, url, data=data, json=json, params=params,
                     headers=merged_headers, files=files,
+                )
+            elif current_strategy == "oauth2_user_context":
+                token = await self._get_oauth2_user_token()
+                hdrs = dict(headers) if headers else {}
+                hdrs["Authorization"] = f"Bearer {token}"
+                response = await self.http_client.request(
+                    method, url, data=data, json=json, params=params, headers=hdrs, files=files
                 )
             else:
                 token = await self.bearer_token_manager.get()
@@ -154,8 +175,11 @@ class XHttpMixin:
             break  # Non-429 response, exit retry loop
 
         # ── 7. Handle 401 for OAuth2 by invalidating token ──
-        if response.status_code == 401 and current_strategy == "oauth2":
-            self.bearer_token_manager.invalidate()
+        if response.status_code == 401:
+            if current_strategy == "oauth2_app":
+                self.bearer_token_manager.invalidate()
+            elif current_strategy == "oauth2_user_context":
+                self._invalidate_oauth2_user_token()
 
         try:
             response.raise_for_status()
@@ -178,7 +202,7 @@ class XHttpMixin:
     ) -> PaginatedResult:
         """Handle X v2 pagination with next_token."""
         all_data = []
-        p = params or {}
+        p = dict(params) if params else {}
         # X v2 max results per page is typically 100 for most endpoints
         p["max_results"] = min(limit, 100)
 
@@ -201,3 +225,4 @@ class XHttpMixin:
             next_token=last_res.get("meta", {}).get("next_token"),
             result_count=len(all_data[:limit]),
         )
+

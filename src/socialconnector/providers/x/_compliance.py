@@ -25,17 +25,12 @@ class XComplianceMixin:
         if parsed.scheme != "https":
             raise SocialConnectorError(f"Insecure protocol in compliance URL: {sanitized}", platform="x")
 
-        # Allow X and AWS S3 (commonly used for compliance uploads) domains
-        allowed_domains = {
-            "api.x.com",
-            "twitter.com",
-            "example.com",
-            # Add specific known S3 buckets or use a more specific regex if possible
-        }
-        domain = parsed.netloc.lower()
-        if not any(domain == d or domain.endswith(f".{d}") or "s3" in domain for d in allowed_domains) and (
-            "amazonaws.com" not in domain and domain not in allowed_domains
-        ):
+        # Allow official X API hosts and AWS pre-signed URLs only.
+        domain = (parsed.hostname or "").lower()
+        trusted_x_domains = {"api.x.com", "api.twitter.com"}
+        is_x_domain = domain in trusted_x_domains
+        is_aws_presigned = domain == "amazonaws.com" or domain.endswith(".amazonaws.com")
+        if not (is_x_domain or is_aws_presigned):
             raise SocialConnectorError(f"Blocked untrusted compliance URL: {sanitized}", platform="x")
 
         return sanitized
@@ -45,7 +40,7 @@ class XComplianceMixin:
         p = Path(file_path).resolve()
         cwd = Path.cwd().resolve()
         tmp = Path(tempfile.gettempdir()).resolve()
-        if not (str(p).startswith(str(cwd)) or str(p).startswith(str(tmp))):
+        if not (p.is_relative_to(cwd) or p.is_relative_to(tmp)):
             raise SocialConnectorError(f"Path traversal detected: {file_path}", platform="x")
         return p
 
