@@ -5,8 +5,8 @@ X HTTP Mixin for unified request handling and pagination.
 import asyncio
 import re
 import time
-from typing import Any
 import urllib.parse
+from typing import Any
 from urllib.parse import urlparse
 
 from socialconnector.core.exceptions import RateLimitError, SocialConnectorError
@@ -147,9 +147,15 @@ class XHttpMixin:
             rem = response.headers.get("x-rate-limit-remaining")
             res = response.headers.get("x-rate-limit-reset")
             if rem is not None:
-                self._rate_limit_remaining = int(rem)
+                try:
+                    self._rate_limit_remaining = int(rem)
+                except (TypeError, ValueError):
+                    self.logger.warning("Ignoring invalid x-rate-limit-remaining header: %r", rem)
             if res is not None:
-                self._rate_limit_reset = float(res)
+                try:
+                    self._rate_limit_reset = float(res)
+                except (TypeError, ValueError):
+                    self.logger.warning("Ignoring invalid x-rate-limit-reset header: %r", res)
 
             # ── 6. Handle 429 with automatic retry + backoff ──
             if response.status_code == 429:
@@ -225,4 +231,3 @@ class XHttpMixin:
             next_token=last_res.get("meta", {}).get("next_token"),
             result_count=len(all_data[:limit]),
         )
-
