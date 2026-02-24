@@ -107,7 +107,7 @@ class XHttpMixin:
                 # authlib's httpx OAuth1Auth integration corrupts JSON POST
                 # bodies, so we sign the request ourselves and pass the
                 # Authorization header explicitly.
-                oauth_headers = self.auth.build_header(method, url)
+                oauth_headers = self.auth.build_header(method, url, params)
                 merged_headers = dict(headers) if headers else {}
                 merged_headers.update(oauth_headers)
                 response = await self.http_client.request(

@@ -1,4 +1,10 @@
 from abc import ABC, abstractmethod
+import base64
+import hashlib
+import hmac as _hmac_mod
+import secrets
+import time
+import urllib.parse
 from typing import Any
 
 
@@ -104,27 +110,106 @@ class OAuth1Auth(AuthProvider):
             token_secret=self.resource_owner_secret,
         )
 
-    def build_header(self, method: str, url: str) -> dict[str, str]:
-        """Build the OAuth1 Authorization header manually.
+    def build_header(
+        self,
+        method: str,
+        url: str,
+        params: dict[str, Any] | None = None,
+        body: str | None = None,
+    ) -> dict[str, str]:
+        """Build an OAuth 1.0a Authorization header.
 
-        This avoids authlib's httpx integration which corrupts JSON POST
-        bodies. Per the OAuth1 spec, JSON bodies are NOT included in
-        the signature base string.
+        Generates a pure Python HMAC-SHA1 signature per RFC 5849.
+
+        Automatically includes query parameters (from `url` or `params`) and
+        form-encoded `body` data in the signature. JSON or empty bodies are
+        skipped as required by the OAuth1 specification.
+
+        Args:
+            method: HTTP verb (e.g., 'GET', 'POST').
+            url: Full request URL (can include query string).
+            params: Optional dict of query parameters.
+            body: Optional raw request body string.
+
+        Returns:
+            A dict containing the 'Authorization' header.
         """
-        from authlib.oauth1 import SIGNATURE_HMAC_SHA1, SIGNATURE_TYPE_HEADER
-        from authlib.oauth1.rfc5849 import ClientAuth
+        import json as _json
 
-        client_auth = ClientAuth(
-            client_id=self.client_key,
-            client_secret=self.client_secret,
-            token=self.resource_owner_key,
-            token_secret=self.resource_owner_secret,
-            signature_method=SIGNATURE_HMAC_SHA1,
-            signature_type=SIGNATURE_TYPE_HEADER,
+        # ── 1. Split URL into base + existing query string ──
+        parsed = urllib.parse.urlparse(url)
+        base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+
+        # Collect all non-OAuth query params that should go into the signature
+        extra_params: dict[str, str] = {}
+        if parsed.query:
+            for k, vs in urllib.parse.parse_qs(parsed.query, keep_blank_values=True).items():
+                extra_params[k] = vs[0]
+        if params:
+            for k, v in params.items():
+                if v is not None:
+                    extra_params[k] = str(v)
+
+        # ── 2. Include body params only if form-encoded (not JSON) ──
+        # Per RFC 5849 §3.4.1.3: only x-www-form-urlencoded bodies are signed.
+        if body:
+            is_json = False
+            try:
+                _json.loads(body)
+                is_json = True
+            except (ValueError, TypeError):
+                pass
+
+            if not is_json:
+                for k, vs in urllib.parse.parse_qs(body, keep_blank_values=True).items():
+                    extra_params[k] = vs[0]
+
+        # ── 3. Build OAuth protocol parameters ──
+        timestamp = str(int(time.time()))
+        nonce = secrets.token_hex(16)
+
+        oauth_params: dict[str, str] = {
+            "oauth_consumer_key": self.client_key,
+            "oauth_nonce": nonce,
+            "oauth_signature_method": "HMAC-SHA1",
+            "oauth_timestamp": timestamp,
+            "oauth_version": "1.0",
+        }
+        if self.resource_owner_key:
+            oauth_params["oauth_token"] = self.resource_owner_key
+
+        # ── 4. Build signature base string ──
+        all_params = {**extra_params, **oauth_params}
+        sorted_pairs = sorted(
+            (urllib.parse.quote(k, safe=""), urllib.parse.quote(str(v), safe=""))
+            for k, v in all_params.items()
         )
-        # body="" because JSON bodies must be excluded from OAuth1 signature
-        _, headers, _ = client_auth.sign(method.upper(), url, body="", headers={})
-        return headers
+        param_string = "&".join(f"{k}={v}" for k, v in sorted_pairs)
+
+        encoded_base_url = urllib.parse.quote(base_url, safe="")
+        encoded_params = urllib.parse.quote(param_string, safe="")
+        signature_base = f"{method.upper()}&{encoded_base_url}&{encoded_params}"
+
+        # ── 5. Sign with HMAC-SHA1 ──
+        signing_key = (
+            f"{urllib.parse.quote(self.client_secret, safe='')}"
+            f"&{urllib.parse.quote(self.resource_owner_secret or '', safe='')}"
+        )
+        digest = _hmac_mod.new(
+            signing_key.encode("utf-8"),
+            signature_base.encode("utf-8"),
+            hashlib.sha1,
+        ).digest()
+        signature = base64.b64encode(digest).decode("utf-8")
+        oauth_params["oauth_signature"] = signature
+
+        # ── 6. Build Authorization header string ──
+        header_parts = ", ".join(
+            f'{k}="{urllib.parse.quote(v, safe="")}"'
+            for k, v in sorted(oauth_params.items())
+        )
+        return {"Authorization": f"OAuth {header_parts}"}
+
 
     def get_auth_token(self, method: str, url: str, body: Any = None) -> str:
         """Not used for httpx integration, but kept for compatibility."""
