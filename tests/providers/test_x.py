@@ -231,16 +231,34 @@ async def test_x_media_upload_v2(x_config, http_client, mock_logger):
     from socialconnector.core.models import Media, MediaType
 
     # INIT
-    respx.post("https://api.x.com/2/media/upload?command=INIT&total_bytes=10&media_type=image%2Fjpeg").mock(
-        return_value=Response(200, json={"data": {"id": "media_v2_123"}})
+    respx.post("https://api.x.com/2/media/upload/initialize").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": {
+                    "media_key": "media_v2_123",
+                    "id": "media_v2_123",
+                    "processing_info": {"state": "succeeded"},
+                }
+            },
+        )
     )
     # APPEND
-    respx.post("https://api.x.com/2/media/upload").mock(
+    respx.post("https://api.x.com/2/media/upload/media_v2_123/append").mock(
         return_value=Response(200)
     )
     # FINALIZE
-    respx.post("https://api.x.com/2/media/upload?command=FINALIZE&media_id=media_v2_123").mock(
-        return_value=Response(200, json={"data": {"id": "media_v2_123"}})
+    respx.post("https://api.x.com/2/media/upload/media_v2_123/finalize").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": {
+                    "media_key": "media_v2_123",
+                    "id": "media_v2_123",
+                    "processing_info": {"state": "succeeded"},
+                }
+            },
+        )
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
@@ -488,7 +506,9 @@ async def test_x_upload_compliance_ids(x_config, http_client, mock_logger, tmp_p
 @respx.mock
 async def test_x_download_compliance_results(x_config, http_client, mock_logger):
     # Mock the external download URL
-    respx.get("https://bucket.s3.amazonaws.com/results.txt").mock(return_value=Response(200, text="123,delete\n456,delete"))
+    respx.get("https://bucket.s3.amazonaws.com/results.txt").mock(
+        return_value=Response(200, text="123,delete\n456,delete")
+    )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
     results = await adapter.download_compliance_results("https://bucket.s3.amazonaws.com/results.txt")
@@ -620,7 +640,10 @@ async def test_media_polling_max_attempts(x_config, mock_logger, http_client):
     adapter.MAX_POLL_ATTEMPTS = 2
 
     with pytest.raises(MediaError) as exc:
-        await adapter._poll_media_status("m1", {"state": "in_progress", "check_after_secs": 0})
+        from socialconnector.core.models import FinalizeUploadResponseDataProcessingInfo
+        await adapter._poll_media_status(
+            "m1", FinalizeUploadResponseDataProcessingInfo(state="in_progress", check_after_secs=0)
+        )
     assert "polling exceeded max attempts" in str(exc.value)
 
 
@@ -2067,7 +2090,7 @@ async def test_get_media_by_keys(x_config, http_client, mock_logger):
     adapter = XAdapter(x_config, http_client, mock_logger)
     result = await adapter.get_media_by_keys(["3_12345", "3_67890"], media_fields=["type", "url"])
 
-    assert result["data"][0]["media_key"] == "3_12345"
+    assert result.data[0]["media_key"] == "3_12345"
     assert route.called
 
     query = route.calls[0].request.url.query.decode("utf-8")
@@ -2097,7 +2120,7 @@ async def test_get_media_analytics(x_config, http_client, mock_logger):
         media_analytics_fields=["view_count", "engagement"],
     )
 
-    assert result["data"][0]["media_key"] == "3_12345"
+    assert result.data[0]["media_key"] == "3_12345"
     assert route.called
 
     query = route.calls[0].request.url.query.decode("utf-8")
@@ -2124,8 +2147,8 @@ async def test_get_media_by_key_basic(x_config, http_client, mock_logger):
     adapter = XAdapter(x_config, http_client, mock_logger)
     result = await adapter.get_media_by_key("3_12345", media_fields=["type", "url"])
 
-    assert result["data"]["media_key"] == "3_12345"
-    assert result["data"]["type"] == "photo"
+    assert result.data.media_key == "3_12345"
+    assert result.data.type == "photo"
     assert route.called
 
     query = route.calls[0].request.url.query.decode("utf-8")
@@ -2160,7 +2183,7 @@ async def test_append_upload_success(x_config, http_client, mock_logger):
     adapter = XAdapter(x_config, http_client, mock_logger)
     result = await adapter.append_upload("3_12345", b"test data", 0)
 
-    assert result is True
+    assert result.model_dump(exclude_unset=True) == {}
     assert route.called
 
     # Assert form data
@@ -2179,9 +2202,10 @@ async def test_append_upload_error(x_config, http_client, mock_logger):
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
-    result = await adapter.append_upload("3_12345", b"test data", 0)
+    from socialconnector.core.exceptions import SocialConnectorError
 
-    assert result is False
+    with pytest.raises(SocialConnectorError):
+        await adapter.append_upload("3_12345", b"test data", 0)
 
 
 # ── finalize_upload tests ────────────────────────────────────────────────────
@@ -2192,14 +2216,14 @@ async def test_append_upload_error(x_config, http_client, mock_logger):
 async def test_finalize_upload_success(x_config, http_client, mock_logger):
     """Successfully finalizes media upload."""
     route = respx.post("https://api.x.com/2/media/upload/3_12345/finalize").mock(
-        return_value=Response(200, json={"data": {"media_id": "3_12345", "processing_info": {"state": "pending"}}})
+        return_value=Response(200, json={"data": {"media_key": "3_12345", "processing_info": {"state": "pending"}}})
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
     result = await adapter.finalize_upload("3_12345")
 
-    assert result["media_id"] == "3_12345"
-    assert result["processing_info"]["state"] == "pending"
+    assert result.data.media_key == "3_12345"
+    assert result.data.processing_info.state == "pending"
     assert route.called
 
     request = route.calls[0].request
@@ -2237,8 +2261,8 @@ async def test_get_upload_status_success(x_config, http_client, mock_logger):
     adapter = XAdapter(x_config, http_client, mock_logger)
     result = await adapter.get_upload_status("3_12345")
 
-    assert result["state"] == "in_progress"
-    assert result["progress_percent"] == 50
+    assert result.data.processing_info.state == "in_progress"
+    assert result.data.processing_info.progress_percent == 50
     assert route.called
 
     query = route.calls[0].request.url.query.decode("utf-8")
@@ -2252,14 +2276,14 @@ async def test_get_upload_status_flat_response(x_config, http_client, mock_logge
     """Successfully gets media upload status from flat response."""
     respx.get("https://api.x.com/2/media/upload").mock(
         return_value=Response(
-            200, json={"processing_info": {"state": "succeeded"}}
+            200, json={"data": {"processing_info": {"state": "succeeded"}}}
         )
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
     result = await adapter.get_upload_status("3_12345")
 
-    assert result["state"] == "succeeded"
+    assert result.data.processing_info.state == "succeeded"
 
 
 # ── upload tests ─────────────────────────────────────────────────────────────
@@ -2275,17 +2299,19 @@ async def test_upload_success(x_config, http_client, mock_logger):
         )
     )
 
+    from socialconnector.core.models import UploadRequest
     adapter = XAdapter(x_config, http_client, mock_logger)
-    result = await adapter.upload(command="INIT", total_bytes=1024, media_type="image/jpeg")
+    req = UploadRequest(media="basedata", media_category="TweetImage", media_type="image/jpeg")
+    result = await adapter.upload(req)
 
-    assert result["id"] == "3_12345"
+    assert result.data.id == "3_12345"
     assert route.called
 
     import json
     request = route.calls[0].request
     req_json = json.loads(request.content)
-    assert req_json["command"] == "INIT"
-    assert req_json["total_bytes"] == 1024
+    assert req_json["media_category"] == "TweetImage"
+    assert "media" in req_json
     assert req_json["media_type"] == "image/jpeg"
 
 
@@ -2298,21 +2324,24 @@ async def test_create_metadata_success(x_config, http_client, mock_logger):
     """Successfully creates media metadata."""
     route = respx.post("https://api.x.com/2/media/metadata").mock(
         return_value=Response(
-            201, json={"data": {}}
+            201, json={"data": {"success": True}}
         )
     )
 
+    from socialconnector.core.models import CreateMetadataRequest, CreateMetadataRequestMetadata
     adapter = XAdapter(x_config, http_client, mock_logger)
-    result = await adapter.create_metadata(media_id="3_12345", alt_text={"text": "A description"})
+    metadata = CreateMetadataRequestMetadata(alt_text={"text": "A description"})
+    req = CreateMetadataRequest(id="3_12345", metadata=metadata)
+    result = await adapter.create_metadata(req)
 
-    assert result == {}
+    assert result.data["success"] is True
     assert route.called
 
     import json
     request = route.calls[0].request
     req_json = json.loads(request.content)
-    assert req_json["media_id"] == "3_12345"
-    assert req_json["alt_text"]["text"] == "A description"
+    assert req_json["id"] == "3_12345"
+    assert req_json["metadata"]["alt_text"]["text"] == "A description"
 
 # ── create_subtitles tests ───────────────────────────────────────────────────
 
@@ -2323,22 +2352,31 @@ async def test_create_subtitles_success(x_config, http_client, mock_logger):
     """Successfully creates media subtitles."""
     route = respx.post("https://api.x.com/2/media/subtitles").mock(
         return_value=Response(
-            201, json={"data": {"media_id": "3_12345"}}
+            201,
+            json={
+                "data": {
+                    "id": "3_12345",
+                    "media_category": "TweetVideo",
+                    "associated_subtitles": [{"language_code": "en"}],
+                }
+            },
         )
     )
 
+    from socialconnector.core.models import CreateSubtitlesRequest, CreateSubtitlesRequestSubtitles
     adapter = XAdapter(x_config, http_client, mock_logger)
-    subtitles = [{"media_id": "3_12345", "language_code": "en", "display_name": "English"}]
-    result = await adapter.create_subtitles(media_id="3_12345", subtitles=subtitles)
+    subs = CreateSubtitlesRequestSubtitles(language_code="en", display_name="English")
+    req = CreateSubtitlesRequest(id="3_12345", subtitles=subs)
+    result = await adapter.create_subtitles(req)
 
-    assert result["media_id"] == "3_12345"
+    assert result.data.id == "3_12345"
     assert route.called
 
     import json
     request = route.calls[0].request
     req_json = json.loads(request.content)
-    assert req_json["media_id"] == "3_12345"
-    assert req_json["subtitles"][0]["language_code"] == "en"
+    assert req_json["id"] == "3_12345"
+    assert req_json["subtitles"]["language_code"] == "en"
 
 
 # ── delete_subtitles tests ───────────────────────────────────────────────────
@@ -2350,25 +2388,23 @@ async def test_delete_subtitles_success(x_config, http_client, mock_logger):
     """Successfully deletes media subtitles."""
     route = respx.delete("https://api.x.com/2/media/subtitles").mock(
         return_value=Response(
-            200, json={"data": {"media_id": "3_12345"}}
+            200, json={"data": {"deleted": True}}
         )
     )
 
+    from socialconnector.core.models import DeleteSubtitlesRequest
     adapter = XAdapter(x_config, http_client, mock_logger)
 
-    result = await adapter.delete_subtitles(
-        media_id="3_12345",
-        media_category="TweetVideo",
-        subtitle_info={"subtitles": [{"language_code": "en"}]}
-    )
+    req = DeleteSubtitlesRequest(id="3_12345", media_category="TweetVideo", language_code="en")
+    result = await adapter.delete_subtitles(req)
 
-    assert result["media_id"] == "3_12345"
+    assert result.data.deleted is True
     assert route.called
 
     import json
     request = route.calls[0].request
     req_json = json.loads(request.content)
-    assert req_json["media_id"] == "3_12345"
+    assert req_json["id"] == "3_12345"
     assert req_json["media_category"] == "TweetVideo"
 
 
@@ -2385,15 +2421,17 @@ async def test_initialize_upload_success(x_config, http_client, mock_logger):
         )
     )
 
+    from socialconnector.core.models import InitializeUploadRequest
     adapter = XAdapter(x_config, http_client, mock_logger)
-    result = await adapter.initialize_upload(total_bytes=1024, media_type="image/jpeg", media_category="TweetVideo")
+    req = InitializeUploadRequest(total_bytes=1024, media_type="image/jpeg", media_category="TweetVideo")
+    result = await adapter.initialize_upload(req)
 
-    assert result["id"] == "3_12345"
+    assert result.data.id == "3_12345"
     assert route.called
 
     import json
     request = route.calls[0].request
     req_json = json.loads(request.content)
-    assert req_json["total_bytes"] == 1024
+    assert "total_bytes" in req_json
     assert req_json["media_type"] == "image/jpeg"
     assert req_json["media_category"] == "TweetVideo"

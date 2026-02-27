@@ -3,10 +3,28 @@ X Media Mixin for chunked uploads to the v2 media/upload endpoint.
 """
 
 import asyncio
-from typing import Any
 
 from socialconnector.core.exceptions import MediaError
-from socialconnector.core.models import Media
+from socialconnector.core.models import (
+    AppendUploadResponse,
+    CreateMetadataRequest,
+    CreateMetadataResponse,
+    CreateSubtitlesRequest,
+    CreateSubtitlesResponse,
+    DeleteSubtitlesRequest,
+    DeleteSubtitlesResponse,
+    FinalizeUploadResponse,
+    FinalizeUploadResponseDataProcessingInfo,
+    GetAnalyticsResponse,
+    GetByKeyResponse,
+    GetByKeysResponse,
+    GetUploadStatusResponse,
+    InitializeUploadRequest,
+    InitializeUploadResponse,
+    Media,
+    UploadRequest,
+    UploadResponse,
+)
 
 
 class XMediaMixin:
@@ -21,44 +39,40 @@ class XMediaMixin:
             raise MediaError("No file bytes provided for upload", platform="x")
 
         # INIT
-        init_params = {
-            "command": "INIT",
-            "total_bytes": len(media.file_bytes),
-            "media_type": media.mime_type or "image/jpeg",
-        }
-        # v2 media upload often requires OAuth1 (user context)
-        res = await self._request("POST", self.MEDIA_UPLOAD_URL, params=init_params, auth_type="oauth1")
-        media_id = res["data"]["id"]
+        init_req = InitializeUploadRequest(
+            total_bytes=len(media.file_bytes),
+            media_type=media.mime_type or "image/jpeg",
+        )
+        init_res = await self.initialize_upload(body=init_req)
+
+        if not init_res.data or not init_res.data.id:
+            raise MediaError("Failed to initialize media upload, no ID returned", platform="x")
+        media_id = init_res.data.id
 
         # APPEND (chunking)
         chunk_size = 1024 * 1024  # 1MB chunks
         for i in range(0, len(media.file_bytes), chunk_size):
             chunk = media.file_bytes[i : i + chunk_size]
-            append_params = {
-                "command": "APPEND",
-                "media_id": media_id,
-                "segment_index": i // chunk_size,
-            }
-            # The 'media' field in multipart should contain the raw bytes
-            # In httpx, we can pass data and files.
-            # v2 docs for media/upload APPEND expect media as a form field
-            files = {"media": ("blob", chunk, media.mime_type)}
-            await self._request("POST", self.MEDIA_UPLOAD_URL, data=append_params, files=files, auth_type="oauth1")
+            await self.append_upload(
+                media_id=media_id,
+                media_chunk=chunk,
+                segment_index=i // chunk_size,
+            )
 
         # FINALIZE
-        final_params = {"command": "FINALIZE", "media_id": media_id}
-        res = await self._request("POST", self.MEDIA_UPLOAD_URL, params=final_params, auth_type="oauth1")
+        final_res = await self.finalize_upload(media_id=media_id)
 
         # Check for processing_info (common for videos)
-        processing_info = res.get("data", {}).get("processing_info")
-        if processing_info:
-            await self._poll_media_status(media_id, processing_info)
+        if final_res.data and final_res.data.processing_info:
+            await self._poll_media_status(media_id, final_res.data.processing_info)
 
         return media_id
 
-    async def _poll_media_status(self, media_id: str, processing_info: dict[str, Any]) -> None:
+    async def _poll_media_status(
+        self, media_id: str, processing_info: FinalizeUploadResponseDataProcessingInfo
+    ) -> None:
         """Poll the status of a media upload until it completes"""
-        state = processing_info.get("state")
+        state = processing_info.state
         attempts = 0
 
         try:
@@ -68,19 +82,19 @@ class XMediaMixin:
                     if attempts > self.MAX_POLL_ATTEMPTS:
                         raise MediaError(f"Media {media_id} polling exceeded max attempts", platform="x")
 
-                    check_after_secs = processing_info.get("check_after_secs", 1)
+                    check_after_secs = processing_info.check_after_secs or 1
                     await asyncio.sleep(check_after_secs)
 
-                    status_params = {"command": "STATUS", "media_id": media_id}
-                    res = await self._request("GET", self.MEDIA_UPLOAD_URL, params=status_params, auth_type="oauth1")
+                    status_res = await self.get_upload_status(media_id=media_id)
 
-                    # Check for error
-                    new_info = res.get("data", {}).get("processing_info") or res.get("processing_info", {})
-                    if new_info:
-                        state = new_info.get("state", state)
+                    if status_res.data and status_res.data.processing_info:
+                        state = status_res.data.processing_info.state
+                        processing_info = status_res.data.processing_info
 
                     if state == "failed":
-                        error_msg = processing_info.get("error", {}).get("message", "Unknown error")
+                        error_msg = "Unknown error"
+                        if status_res.errors and len(status_res.errors) > 0:
+                            error_msg = str(status_res.errors[0])
                         raise MediaError(f"Media processing failed: {error_msg}", platform="x")
 
                 if state != "succeeded":
@@ -92,7 +106,7 @@ class XMediaMixin:
         self,
         media_keys: list[str],
         media_fields: list[str] | None = None,
-    ) -> dict:
+    ) -> GetByKeysResponse:
         """
         Get Media by media keys.
         Retrieves details of Media files by their media keys (max 100).
@@ -104,7 +118,8 @@ class XMediaMixin:
         if media_fields:
             p["media.fields"] = ",".join(media_fields)
 
-        return await self._request("GET", path, params=p)
+        res = await self._request("GET", path, params=p)
+        return GetByKeysResponse.model_validate(res)
 
     async def get_media_analytics(
         self,
@@ -114,7 +129,7 @@ class XMediaMixin:
         start_time: str | None = None,
         granularity: str | None = None,
         media_analytics_fields: list[str] | None = None,
-    ) -> dict:
+    ) -> GetAnalyticsResponse:
         """
         Get Media analytics.
         Retrieves analytics data for media.
@@ -132,13 +147,14 @@ class XMediaMixin:
         if media_analytics_fields:
             p["media_analytics.fields"] = ",".join(media_analytics_fields)
 
-        return await self._request("GET", path, params=p)
+        res = await self._request("GET", path, params=p)
+        return GetAnalyticsResponse.model_validate(res)
 
     async def get_media_by_key(
         self,
         media_key: str,
         media_fields: list[str] | None = None,
-    ) -> dict:
+    ) -> GetByKeyResponse:
         """
         Get Media by media key.
         Retrieves details of a specific Media file by its media key.
@@ -148,14 +164,15 @@ class XMediaMixin:
         if media_fields:
             p["media.fields"] = ",".join(media_fields)
 
-        return await self._request("GET", path, params=p or None)
+        res = await self._request("GET", path, params=p or None)
+        return GetByKeyResponse.model_validate(res)
 
     async def append_upload(
         self,
         media_id: str,
         media_chunk: bytes,
         segment_index: int,
-    ) -> bool:
+    ) -> AppendUploadResponse:
         """
         Append Media upload.
         Appends data to a Media upload request.
@@ -169,15 +186,10 @@ class XMediaMixin:
         }
         files = {"media": ("blob", media_chunk, "application/octet-stream")}
 
-        # v2 media append endpoint requires oauth1 when using user-context (which media uploads usually require)
-        try:
-            await self._request("POST", path, data=data, files=files, auth_type="oauth1")
-            return True
-        except Exception as e:
-            self.logger.error(f"Failed to append media chunk: {e}")
-            return False
+        res = await self._request("POST", path, data=data, files=files, auth_type="oauth1")
+        return AppendUploadResponse.model_validate(res)
 
-    async def finalize_upload(self, media_id: str) -> dict:
+    async def finalize_upload(self, media_id: str) -> FinalizeUploadResponse:
         """
         Finalize Media upload.
         Finalizes a Media upload request.
@@ -189,14 +201,13 @@ class XMediaMixin:
             "media_id": media_id,
         }
 
-        # v2 media finalize endpoint requires oauth1 when using user-context
         res = await self._request("POST", path, data=data, auth_type="oauth1")
-        return res.get("data", res)
+        return FinalizeUploadResponse.model_validate(res)
 
     async def get_upload_status(
         self,
         media_id: str,
-    ) -> dict:
+    ) -> GetUploadStatusResponse:
         """
         Get Media upload status.
         Retrieves the status of a Media upload by its ID.
@@ -207,67 +218,55 @@ class XMediaMixin:
             "media_id": media_id,
         }
 
-        # Checking upload status requires oauth1 context
         res = await self._request("GET", path, params=p, auth_type="oauth1")
+        return GetUploadStatusResponse.model_validate(res)
 
-        # Return processing_info if inside data or at top level, else return full response
-        if "data" in res and "processing_info" in res["data"]:
-            return res["data"]["processing_info"]
-        if "processing_info" in res:
-            return res["processing_info"]
-        return res.get("data", res)
-
-    async def upload(self, **kwargs: Any) -> dict:
+    async def upload(self, body: UploadRequest) -> UploadResponse:
         """
         Upload media.
         Uploads a media file for use in posts or other content.
         """
         path = "media/upload"
+        json_data = body.model_dump(exclude_none=True)
+        res = await self._request("POST", path, json=json_data, auth_type="oauth1")
+        return UploadResponse.model_validate(res)
 
-        # Upload endpoint requires oauth1 when using user-context
-        res = await self._request("POST", path, json=kwargs, auth_type="oauth1")
-        return res.get("data", res)
-
-    async def create_metadata(self, **kwargs: Any) -> dict:
+    async def create_metadata(self, body: CreateMetadataRequest) -> CreateMetadataResponse:
         """
         Create Media metadata.
         Creates metadata for a Media file.
         """
         path = "media/metadata"
+        json_data = body.model_dump(exclude_none=True)
+        res = await self._request("POST", path, json=json_data, auth_type="oauth1")
+        return CreateMetadataResponse.model_validate(res)
 
-        # Creating metadata requires oauth1 context
-        res = await self._request("POST", path, json=kwargs, auth_type="oauth1")
-        return res.get("data", res)
-
-    async def create_subtitles(self, **kwargs: Any) -> dict:
+    async def create_subtitles(self, body: CreateSubtitlesRequest) -> CreateSubtitlesResponse:
         """
         Create Media subtitles.
         Creates subtitles for a specific Media file.
         """
         path = "media/subtitles"
+        json_data = body.model_dump(exclude_none=True)
+        res = await self._request("POST", path, json=json_data, auth_type="oauth1")
+        return CreateSubtitlesResponse.model_validate(res)
 
-        # Subtitles endpoint requires oauth1 when using user-context
-        res = await self._request("POST", path, json=kwargs, auth_type="oauth1")
-        return res.get("data", res)
-
-    async def delete_subtitles(self, **kwargs: Any) -> dict:
+    async def delete_subtitles(self, body: DeleteSubtitlesRequest) -> DeleteSubtitlesResponse:
         """
         Delete Media subtitles.
         Deletes subtitles for a specific Media file.
         """
         path = "media/subtitles"
+        json_data = body.model_dump(exclude_none=True)
+        res = await self._request("DELETE", path, json=json_data, auth_type="oauth1")
+        return DeleteSubtitlesResponse.model_validate(res)
 
-        # Subtitles endpoint requires oauth1 when using user-context
-        res = await self._request("DELETE", path, json=kwargs, auth_type="oauth1")
-        return res.get("data", res)
-
-    async def initialize_upload(self, **kwargs: Any) -> dict:
+    async def initialize_upload(self, body: InitializeUploadRequest) -> InitializeUploadResponse:
         """
         Initialize media upload.
         Initializes a media upload.
         """
         path = "media/upload/initialize"
-
-        # Initialize upload endpoint requires oauth1 when using user-context
-        res = await self._request("POST", path, json=kwargs, auth_type="oauth1")
-        return res.get("data", res)
+        json_data = body.model_dump(exclude_none=True)
+        res = await self._request("POST", path, json=json_data, auth_type="oauth1")
+        return InitializeUploadResponse.model_validate(res)
