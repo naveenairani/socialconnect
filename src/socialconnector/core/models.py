@@ -826,6 +826,13 @@ class GetOpenApiSpecResponse(BaseModel):
 
 # --- X Media API Models ---
 
+class GetByKeyResponseData(BaseModel):
+    height: int | None = None
+    media_key: str | None = None
+    type: str | None = None
+    width: int | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
 class GetByKeysResponse(BaseModel):
     data: list[Any] | None = None
     errors: list[Any] | None = None
@@ -836,15 +843,9 @@ class GetAnalyticsResponse(BaseModel):
     errors: list[Any] | None = None
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
-class GetByKeyResponseData(BaseModel):
-    height: int | None = None
-    media_key: str | None = None
-    type: str | None = None
-    width: int | None = None
-    model_config = ConfigDict(populate_by_name=True)
 
 class GetByKeyResponse(BaseModel):
-    data: GetByKeyResponseData | dict[str, Any] = Field(default_factory=dict)
+    data: GetByKeyResponseData | None = None
     errors: list[Any] | None = None
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 

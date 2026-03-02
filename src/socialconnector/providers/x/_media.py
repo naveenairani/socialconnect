@@ -147,7 +147,7 @@ class XMediaMixin:
         if media_analytics_fields:
             p["media_analytics.fields"] = ",".join(media_analytics_fields)
 
-        res = await self._request("GET", path, params=p)
+        res = await self._request("GET", path, params=p, auth_type="oauth2_user_context")
         return GetAnalyticsResponse.model_validate(res)
 
     async def get_media_by_key(
