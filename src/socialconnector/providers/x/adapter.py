@@ -8,7 +8,7 @@ from typing import Any
 
 from socialconnector.core.auth import OAuth1Auth
 from socialconnector.core.base_adapter import BaseAdapter
-from socialconnector.core.exceptions import AuthenticationError, RateLimitError
+from socialconnector.core.exceptions import AuthenticationError, RateLimitError, SocialConnectorError
 from socialconnector.core.models import AdapterConfig, HealthStatus, WebhookConfig
 from socialconnector.core.oauth2_pkce import OAuth2PKCEFlow, OAuth2Token
 
@@ -293,12 +293,42 @@ class XAdapter(
                     raise AuthenticationError("Invalid X credentials (no user data)", platform="x")
             except AuthenticationError:
                 raise
-            except RateLimitError as e:
-                raise e
+            except RateLimitError:
+                raise
+            except SocialConnectorError as e:
+                status_code: int | None = None
+                original = e.original_error
+                response = getattr(original, "response", None)
+                if response is not None:
+                    code = getattr(response, "status_code", None)
+                    if isinstance(code, int):
+                        status_code = code
+
+                if status_code in (401, 403):
+                    msg = "X authentication failed. Please check your credentials."
+                    raise AuthenticationError(msg, platform="x") from e
+
+                if status_code is not None and status_code >= 500:
+                    # Retry on legacy host before surfacing service unavailability.
+                    self.logger.warning(
+                        "Primary X host failed with %s during connect; retrying via api.twitter.com",
+                        status_code,
+                    )
+                    try:
+                        fallback_data = await self._request("GET", "https://api.twitter.com/2/users/me")
+                        if not fallback_data.get("data", {}).get("id"):
+                            raise AuthenticationError("Invalid X credentials (no user data)", platform="x")
+                        return
+                    except AuthenticationError:
+                        raise
+                    except Exception:
+                        msg = f"X API is temporarily unavailable during connect (status {status_code})."
+                        raise SocialConnectorError(msg, platform="x", original_error=e.original_error) from e
+
+                raise
             except Exception as e:
-                # Fix #3: Sanitize error logs to avoid information disclosure
-                msg = "X authentication failed. Please check your credentials."
-                raise AuthenticationError(msg, platform="x") from e
+                msg = "X connect failed due to an unexpected error."
+                raise SocialConnectorError(msg, platform="x", original_error=e) from e
         else:
             # For App-only, just verify we can get a token
             await self.bearer_token_manager.get()
