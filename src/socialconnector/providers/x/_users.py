@@ -2,8 +2,8 @@
 X Users Mixin for managing user info, follows, likes, and bookmarks.
 """
 
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Awaitable, cast
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Any, cast
 
 from socialconnector.core.models import PaginatedResult, UserInfo
 
@@ -232,9 +232,19 @@ class XUsersMixin(XUsersProtocol):
             self.logger.error(f"Failed to update list {list_id}: {e}")
             return False
 
-    async def create_list(self, name: str, *, description: str | None = None, private: bool | None = None) -> dict[Any, Any]:
+    async def create_list(
+        self,
+        name: str,
+        *,
+        description: str | None = None,
+        private: bool | None = None,
+    ) -> dict[Any, Any]:
         """Create a new list."""
-        data = {k: v for k, v in [("name", name), ("description", description), ("private", private)] if v is not None}
+        data = {
+            k: v
+            for k, v in [("name", name), ("description", description), ("private", private)]
+            if v is not None
+        }
         try:
             res = await self._request("POST", "lists", json=data, auth_type="oauth1")
             return dict(res.get("data", {}))

@@ -6,8 +6,8 @@ import asyncio
 import re
 import time
 import urllib.parse
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Awaitable
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from socialconnector.core.exceptions import RateLimitError, SocialConnectorError
@@ -184,7 +184,7 @@ class XHttpMixin(XHttpMixinProtocol):
 
             if response is None:
                 break
-            
+
             # ── 6. Handle 429 with automatic retry + backoff ──
             if response.status_code == 429:
                 if attempt < self.MAX_RETRIES_ON_429:
@@ -217,7 +217,7 @@ class XHttpMixin(XHttpMixinProtocol):
 
         if response is None:
             raise SocialConnectorError("No response received from X API", platform="x")
-        
+
         try:
             response.raise_for_status()
         except Exception as e:

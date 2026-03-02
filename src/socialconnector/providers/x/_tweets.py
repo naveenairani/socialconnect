@@ -2,8 +2,8 @@
 X Tweets Mixin for managing posts, timelines, and searches.
 """
 
-from collections.abc import AsyncIterator, Callable
-from typing import TYPE_CHECKING, Any, Awaitable, cast
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 
 from socialconnector.core.exceptions import MessageError
 from socialconnector.core.models import (

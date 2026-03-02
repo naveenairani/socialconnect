@@ -2,9 +2,9 @@
 X Direct Messages Mixin for managing conversations and messages.
 """
 
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Awaitable
-from collections.abc import AsyncGenerator, Callable
+from typing import TYPE_CHECKING, Any
 
 from socialconnector.core.models import (
     CreateByConversationIdRequest,

@@ -3,8 +3,8 @@ X Account Activity Mixin for webhooks and subscriptions.
 """
 
 
-from typing import TYPE_CHECKING, Any, Awaitable
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 
 from socialconnector.core.models import (
     CreateReplayJobResponse,

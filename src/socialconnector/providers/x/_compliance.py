@@ -3,9 +3,9 @@ X Compliance Mixin for batch compliance jobs.
 """
 
 import tempfile
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Awaitable
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from socialconnector.core.exceptions import SocialConnectorError

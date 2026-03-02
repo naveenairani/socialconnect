@@ -1,8 +1,8 @@
 """
 X Notes Mixin for managing Community Notes.
 """
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Awaitable, cast
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 
 from socialconnector.core.models import (
     CommunityNote,

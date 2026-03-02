@@ -3,8 +3,8 @@ X Media Mixin for chunked uploads to the v2 media/upload endpoint.
 """
 
 import asyncio
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Awaitable, cast
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 
 from socialconnector.core.exceptions import MediaError
 from socialconnector.core.models import (
