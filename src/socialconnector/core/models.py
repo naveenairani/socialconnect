@@ -974,3 +974,64 @@ class InitializeUploadResponse(BaseModel):
     data: FinalizeUploadResponseData | None = None
     errors: list[Any] | None = None
     model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+# --- X News API Models ---
+
+class NewsSearchResponseMeta(BaseModel):
+    result_count: int | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class NewsSearchResponse(BaseModel):
+    data: list[Any] | None = None
+    errors: list[Any] | None = None
+    meta: NewsSearchResponseMeta | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+class NewsGetResponseDataContextsEntities(BaseModel):
+    events: list[Any] | None = None
+    organizations: list[Any] | None = None
+    people: list[Any] | None = None
+    places: list[Any] | None = None
+    products: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class NewsGetResponseDataContextsFinance(BaseModel):
+    tickers: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class NewsGetResponseDataContextsSports(BaseModel):
+    teams: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class NewsGetResponseDataContexts(BaseModel):
+    entities: NewsGetResponseDataContextsEntities | None = None
+    finance: NewsGetResponseDataContextsFinance | None = None
+    sports: NewsGetResponseDataContextsSports | None = None
+    topics: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class NewsGetResponseData(BaseModel):
+    category: str | None = None
+    cluster_posts_results: list[Any] | None = None
+    contexts: NewsGetResponseDataContexts | None = None
+    disclaimer: str | None = None
+    hook: str | None = None
+    keywords: list[Any] | None = None
+    last_updated_at_ms: str | None = None
+    name: str | None = None
+    rest_id: str | None = None
+    summary: str | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class NewsGetResponse(BaseModel):
+    data: NewsGetResponseData | None = None
+    errors: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")

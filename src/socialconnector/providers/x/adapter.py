@@ -22,6 +22,7 @@ from ._dms import XDmsMixin
 from ._general import XGeneralMixin
 from ._http import XHttpMixin
 from ._media import XMediaMixin
+from ._news import XNewsMixin
 from ._notes import XNotesMixin
 from ._stream import XStreamMixin
 from ._tweets import XTweetsMixin
@@ -36,6 +37,7 @@ class XAdapter(
     XComplianceMixin,
     XStreamMixin,
     XMediaMixin,
+    XNewsMixin,
     XNotesMixin,
     XAccountActivityMixin,
     XChatMixin,
