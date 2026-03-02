@@ -1,6 +1,6 @@
-# Contributing to SocialConnector
+﻿# Contributing to SocialConnector
 
-Thank you for your interest in contributing! Every contribution — bug fixes, new providers, docs, tests — is appreciated.
+Thank you for your interest in contributing! Every contribution - bug fixes, new providers, docs, tests - is appreciated.
 
 ## Table of Contents
 
@@ -44,36 +44,36 @@ cp .env.example .env
 
 ```
 socialconnect/
-├── src/socialconnector/
-│   ├── __init__.py          # SocialConnector factory + public API
-│   ├── core/                # BaseAdapter, models, exceptions
-│   ├── providers/           # One file per platform (x.py, telegram.py, ...)
-│   ├── utils/               # Shared helpers
-│   └── webhooks/            # Webhook handling infrastructure
-├── tests/
-│   └── providers/           # One test file per provider
-├── docs/                    # Architecture and provider guides
-├── pyproject.toml
-└── CHANGELOG.md
+|-- src/socialconnector/
+|   |-- __init__.py          # SocialConnector factory + public API
+|   |-- core/                # BaseAdapter, models, exceptions
+|   |-- providers/           # One module/package per platform (x/, telegram.py, ...)
+|   |-- utils/               # Shared helpers
+|   `-- webhooks/            # Webhook handling infrastructure
+|-- tests/
+|   `-- providers/           # One test file per provider
+|-- docs/                    # Architecture and provider guides
+|-- pyproject.toml
+`-- CHANGELOG.md
 ```
 
 ---
 
 ## Adding a New Provider
 
-1. **Create the adapter** — `src/socialconnector/providers/my_platform.py`
-   - Inherit from `BaseAdapter` in `src/socialconnector/core/base.py`
+1. **Create the adapter** - `src/socialconnector/providers/my_platform.py` (or a package directory)
+   - Inherit from `BaseAdapter` in `src/socialconnector/core/base_adapter.py`
    - Implement all abstract methods: `post()`, `direct_message()`, `upload_media()`
 
-2. **Register it** — add to `src/socialconnector/providers/__init__.py` and the factory in `src/socialconnector/__init__.py`
+2. **Register it** - add to `src/socialconnector/providers/__init__.py` and the factory in `src/socialconnector/__init__.py`
 
-3. **Add optional dependencies** — in `pyproject.toml` under `[project.optional-dependencies]`
+3. **Add optional dependencies** - in `pyproject.toml` under `[project.optional-dependencies]`
 
-4. **Write tests** — `tests/providers/test_my_platform.py`
+4. **Write tests** - `tests/providers/test_my_platform.py`
 
-5. **Add docs** — `docs/providers/MY_PLATFORM.md`
+5. **Add docs** - `docs/providers/MY_PLATFORM.md`
 
-6. **Update the README** — add a row to the Supported Platforms table
+6. **Update the README** - add a row to the Supported Platforms table
 
 See `docs/ARCHITECTURE.md` for the full adapter interface specification.
 
@@ -124,11 +124,11 @@ mypy src/
 
 2. **Make your changes** with tests and type annotations
 
-3. **Update `CHANGELOG.md`** — add an entry under `[Unreleased]`
+3. **Update `CHANGELOG.md`** - add an entry under `[Unreleased]`
 
 4. **Push and open a PR** using the provided template
 
-5. **A maintainer will review** — please be patient and responsive to feedback
+5. **A maintainer will review** - please be patient and responsive to feedback
 
 ### Commit Message Style
 
@@ -146,3 +146,4 @@ test: add coverage for Telegram DM edge case
 ## Questions?
 
 Open a [GitHub Discussion](https://github.com/naveenairani/socialconnect/discussions) or see [SUPPORT.md](SUPPORT.md).
+
