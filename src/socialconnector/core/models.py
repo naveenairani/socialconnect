@@ -1035,3 +1035,27 @@ class NewsGetResponse(BaseModel):
     data: NewsGetResponseData | None = None
     errors: list[Any] | None = None
     model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+# --- X Usage API Models ---
+
+class UsageGetResponseDataDailyProjectUsage(BaseModel):
+    project_id: int | None = None
+    usage: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class UsageGetResponseData(BaseModel):
+    cap_reset_day: int | None = None
+    daily_client_app_usage: list[Any] | None = None
+    daily_project_usage: UsageGetResponseDataDailyProjectUsage | None = None
+    project_cap: int | None = None
+    project_id: str | None = None
+    project_usage: int | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class UsageGetResponse(BaseModel):
+    data: UsageGetResponseData | None = None
+    errors: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")

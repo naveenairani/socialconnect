@@ -26,6 +26,7 @@ from ._news import XNewsMixin
 from ._notes import XNotesMixin
 from ._stream import XStreamMixin
 from ._tweets import XTweetsMixin
+from ._usage import XUsageMixin
 from ._users import XUsersMixin
 
 
@@ -39,6 +40,7 @@ class XAdapter(
     XMediaMixin,
     XNewsMixin,
     XNotesMixin,
+    XUsageMixin,
     XAccountActivityMixin,
     XChatMixin,
     XCommunitiesMixin,
