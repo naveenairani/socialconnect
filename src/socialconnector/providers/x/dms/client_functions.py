@@ -7,6 +7,13 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from socialconnector.core.models import (
+    Message,
+    MessageResponse,
+    PaginatedResult,
+    UserInfo,
+)
+
+from .models import (
     CreateByConversationIdRequest,
     CreateByConversationIdResponse,
     CreateByParticipantIdRequest,
@@ -18,10 +25,6 @@ from socialconnector.core.models import (
     GetEventsByIdResponse,
     GetEventsByParticipantIdResponse,
     GetEventsResponse,
-    Message,
-    MessageResponse,
-    PaginatedResult,
-    UserInfo,
 )
 
 if TYPE_CHECKING:
@@ -41,6 +44,7 @@ if TYPE_CHECKING:
         _get_oauth2_user_token: Callable[[], Awaitable[Any]]
         _invalidate_oauth2_user_token: Callable[[], None]
 else:
+
     class XDmsMixinProtocol:
         pass
 

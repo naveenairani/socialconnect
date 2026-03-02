@@ -2,24 +2,24 @@
 X Account Activity Mixin for webhooks and subscriptions.
 """
 
-
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
-from socialconnector.core.models import (
+from socialconnector.core.models import PaginatedResult
+from socialconnector.core.streaming import StreamConfig, stream_with_retry
+
+from .models import (
     CreateReplayJobResponse,
     CreateSubscriptionRequest,
     CreateSubscriptionResponse,
     DeleteSubscriptionResponse,
     GetSubscriptionCountResponse,
     GetSubscriptionsResponse,
-    PaginatedResult,
     StreamResponse,
     UpdateSubscriptionRequest,
     UpdateSubscriptionResponse,
     ValidateSubscriptionResponse,
 )
-from socialconnector.core.streaming import StreamConfig, stream_with_retry
 
 if TYPE_CHECKING:
     import logging
@@ -38,9 +38,9 @@ if TYPE_CHECKING:
         _get_oauth2_user_token: Callable[[], Awaitable[Any]]
         _invalidate_oauth2_user_token: Callable[[], None]
 else:
+
     class XAccountActivityMixinProtocol:
         pass
-
 
 
 class XAccountActivityMixin(XAccountActivityMixinProtocol):
@@ -162,9 +162,7 @@ class XAccountActivityMixin(XAccountActivityMixinProtocol):
         res = await self._request("GET", path, auth_type="oauth2")
         return GetSubscriptionCountResponse.model_validate(res)
 
-    async def create_replay_job(
-        self, webhook_id: str, from_date: str, to_date: str
-    ) -> CreateReplayJobResponse:
+    async def create_replay_job(self, webhook_id: str, from_date: str, to_date: str) -> CreateReplayJobResponse:
         """
         Create replay job
         Creates a replay job to retrieve activities from up to the past 5 days for all

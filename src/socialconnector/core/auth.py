@@ -181,8 +181,7 @@ class OAuth1Auth(AuthProvider):
         # ── 4. Build signature base string ──
         all_params = {**extra_params, **oauth_params}
         sorted_pairs = sorted(
-            (urllib.parse.quote(k, safe=""), urllib.parse.quote(str(v), safe=""))
-            for k, v in all_params.items()
+            (urllib.parse.quote(k, safe=""), urllib.parse.quote(str(v), safe="")) for k, v in all_params.items()
         )
         param_string = "&".join(f"{k}={v}" for k, v in sorted_pairs)
 
@@ -204,12 +203,8 @@ class OAuth1Auth(AuthProvider):
         oauth_params["oauth_signature"] = signature
 
         # ── 6. Build Authorization header string ──
-        header_parts = ", ".join(
-            f'{k}="{urllib.parse.quote(v, safe="")}"'
-            for k, v in sorted(oauth_params.items())
-        )
+        header_parts = ", ".join(f'{k}="{urllib.parse.quote(v, safe="")}"' for k, v in sorted(oauth_params.items()))
         return {"Authorization": f"OAuth {header_parts}"}
-
 
     def get_auth_token(self, method: str, url: str, body: Any = None) -> str:
         """Not used for httpx integration, but kept for compatibility."""
@@ -256,9 +251,7 @@ class OAuth2PKCEAuth(AuthProvider):
     async def refresh(self) -> None:
 
         # Callers should pass their shared http_client; this is a convenience shim.
-        raise NotImplementedError(
-            "Call flow.refresh(http_client) directly to refresh the token."
-        )
+        raise NotImplementedError("Call flow.refresh(http_client) directly to refresh the token.")
 
     def is_valid(self) -> bool:
         if not self.flow.token:

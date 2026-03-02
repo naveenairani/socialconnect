@@ -5,7 +5,7 @@ X Communities API Mixin for retrieving and searching communities.
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
-from socialconnector.core.models import (
+from .models import (
     GetByIdResponse,
     SearchResponse,
 )
@@ -28,9 +28,9 @@ if TYPE_CHECKING:
         _get_oauth2_user_token: Any
         _invalidate_oauth2_user_token: Any
 else:
+
     class XCommunitiesMixinProtocol:
         pass
-
 
 
 class XCommunitiesMixin(XCommunitiesMixinProtocol):

@@ -12,23 +12,23 @@ from socialconnector.core.exceptions import AuthenticationError, RateLimitError,
 from socialconnector.core.models import AdapterConfig, HealthStatus, WebhookConfig
 from socialconnector.core.oauth2_pkce import OAuth2PKCEFlow, OAuth2Token
 
-from ._account_activity import XAccountActivityMixin
-from ._auth import BearerTokenManager
-from ._chat import XChatMixin
-from ._communities import XCommunitiesMixin
-from ._compliance import XComplianceMixin
-from ._connections import XConnectionsMixin
-from ._dms import XDmsMixin
-from ._general import XGeneralMixin
 from ._http import XHttpMixin
-from ._media import XMediaMixin
-from ._news import XNewsMixin
-from ._notes import XNotesMixin
-from ._spaces import XSpacesMixin
-from ._stream import XStreamMixin
-from ._tweets import XTweetsMixin
-from ._usage import XUsageMixin
-from ._users import XUsersMixin
+from .account_activity.client_functions import XAccountActivityMixin
+from .auth.client_functions import BearerTokenManager
+from .chat.client_functions import XChatMixin
+from .communities.client_functions import XCommunitiesMixin
+from .compliance.client_functions import XComplianceMixin
+from .connections.client_functions import XConnectionsMixin
+from .dms.client_functions import XDmsMixin
+from .general.client_functions import XGeneralMixin
+from .media.client_functions import XMediaMixin
+from .news.client_functions import XNewsMixin
+from .notes.client_functions import XNotesMixin
+from .spaces.client_functions import XSpacesMixin
+from .stream.client_functions import XStreamMixin
+from .tweets.client_functions import XTweetsMixin
+from .usage.client_functions import XUsageMixin
+from .users.client_functions import XUsersMixin
 
 
 class XAdapter(
@@ -89,9 +89,8 @@ class XAdapter(
             access_token_secret=config.extra.get("access_token_secret"),
             bearer_token=config.extra.get("bearer_token"),
             oauth2_user_access_token=(
-                config.extra.get("oauth2_user_access_token")
-                or config.extra.get("user_access_token")
-            )
+                config.extra.get("oauth2_user_access_token") or config.extra.get("user_access_token")
+            ),
         )
         self._init_oauth2_user_pkce(config)
 
@@ -110,33 +109,15 @@ class XAdapter(
         import os
 
         # Use explicitly provided keys, or fallback to config, or fallback to ENV
-        final_api_key = (
-            api_key
-            or self.config.api_key
-            or os.getenv("X_API_KEY")
-            or os.getenv("TWITTER_API_KEY")
-        )
+        final_api_key = api_key or self.config.api_key or os.getenv("X_API_KEY") or os.getenv("TWITTER_API_KEY")
         final_api_secret = (
-            api_secret
-            or self.config.api_secret
-            or os.getenv("X_API_SECRET")
-            or os.getenv("TWITTER_API_SECRET")
+            api_secret or self.config.api_secret or os.getenv("X_API_SECRET") or os.getenv("TWITTER_API_SECRET")
         )
-        final_access_tok = (
-            access_token
-            or os.getenv("X_ACCESS_TOKEN")
-            or os.getenv("TWITTER_ACCESS_TOKEN")
-        )
+        final_access_tok = access_token or os.getenv("X_ACCESS_TOKEN") or os.getenv("TWITTER_ACCESS_TOKEN")
         final_access_sec = (
-            access_token_secret
-            or os.getenv("X_ACCESS_TOKEN_SECRET")
-            or os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
+            access_token_secret or os.getenv("X_ACCESS_TOKEN_SECRET") or os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
         )
-        final_bearer = (
-            bearer_token
-            or os.getenv("X_BEARER_TOKEN")
-            or os.getenv("TWITTER_BEARER_TOKEN")
-        )
+        final_bearer = bearer_token or os.getenv("X_BEARER_TOKEN") or os.getenv("TWITTER_BEARER_TOKEN")
 
         self.access_token = final_access_tok
         self.access_token_secret = final_access_sec
@@ -304,7 +285,7 @@ class XAdapter(
                     if isinstance(code, int):
                         status_code = code
 
-                if status_code in (401, 403):
+                if status_code in (401, 403) or (status_code is not None and status_code >= 500):
                     msg = "X authentication failed. Please check your credentials."
                     raise AuthenticationError(msg, platform="x") from e
 

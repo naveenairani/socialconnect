@@ -5,7 +5,7 @@ X Spaces Mixin for interacting with X Spaces endpoints.
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
-from socialconnector.core.models import (
+from .models import (
     SpaceGetBuyersResponse,
     SpaceGetByCreatorIdsResponse,
     SpaceGetByIdResponse,
@@ -32,6 +32,7 @@ if TYPE_CHECKING:
         _get_oauth2_user_token: Any
         _invalidate_oauth2_user_token: Any
 else:
+
     class XSpacesMixinProtocol:
         pass
 

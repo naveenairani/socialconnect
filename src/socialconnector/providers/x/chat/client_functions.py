@@ -5,7 +5,7 @@ X Chat API Mixin for encrypted direct messages and public keys.
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
-from socialconnector.core.models import (
+from .models import (
     AddUserPublicKeyRequest,
     AddUserPublicKeyResponse,
     GetConversationResponse,
@@ -33,6 +33,7 @@ if TYPE_CHECKING:
         _get_oauth2_user_token: Any
         _invalidate_oauth2_user_token: Any
 else:
+
     class XChatMixinProtocol:
         pass
 
@@ -40,9 +41,7 @@ else:
 class XChatMixin(XChatMixinProtocol):
     """Mixin for X Chat API operations (encrypted DMs, public keys)."""
 
-    async def send_message(
-        self, conversation_id: str, body: SendMessageRequest
-    ) -> SendMessageResponse:
+    async def send_message(self, conversation_id: str, body: SendMessageRequest) -> SendMessageResponse:
         """
         Send Chat Message
         Sends an encrypted message to a specific Chat conversation.
@@ -105,9 +104,7 @@ class XChatMixin(XChatMixinProtocol):
         res = await self._request("GET", path, params=params, auth_type="oauth1")
         return GetUserPublicKeysResponse.model_validate(res)
 
-    async def add_user_public_key(
-        self, user_id: str, body: AddUserPublicKeyRequest
-    ) -> AddUserPublicKeyResponse:
+    async def add_user_public_key(self, user_id: str, body: AddUserPublicKeyRequest) -> AddUserPublicKeyResponse:
         """
         Add public key
         Registers a user's public key for X Chat encryption.

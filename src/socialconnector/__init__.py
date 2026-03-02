@@ -20,12 +20,14 @@ from socialconnector.utils.http_client import HTTPClient
 
 
 @overload
-def SocialConnector(provider: Literal["x", "twitter"], **config: Any) -> XAdapter: ... # noqa: N802
+def SocialConnector(provider: Literal["x", "twitter"], **config: Any) -> XAdapter: ...  # noqa: N802
+
 
 @overload
-def SocialConnector(provider: str, **config: Any) -> Any: ... # noqa: N802
+def SocialConnector(provider: str, **config: Any) -> Any: ...  # noqa: N802
 
-def SocialConnector(provider: str, **config: Any) -> Any: # noqa: N802
+
+def SocialConnector(provider: str, **config: Any) -> Any:  # noqa: N802
     """
     Main entry point for the SDK.
     Returns a strongly-typed adapter instance for the specified provider.

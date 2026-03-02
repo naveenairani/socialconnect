@@ -9,12 +9,13 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from socialconnector.core.exceptions import SocialConnectorError
-from socialconnector.core.models import (
+from socialconnector.core.models import PaginatedResult
+
+from .models import (
     CreateJobsRequest,
     CreateJobsResponse,
     GetJobsByIdResponse,
     GetJobsResponse,
-    PaginatedResult,
 )
 
 if TYPE_CHECKING:
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
         _get_oauth2_user_token: Callable[[], Awaitable[Any]]
         _invalidate_oauth2_user_token: Callable[[], None]
 else:
+
     class XComplianceMixinProtocol:
         pass
 
@@ -78,9 +80,7 @@ class XComplianceMixin(XComplianceMixinProtocol):
         res = await self._request("POST", path, json=data, auth_type="oauth2")
         return CreateJobsResponse.model_validate(res)
 
-    async def list_compliance_jobs(
-        self, type: str | None = None, status: str | None = None
-    ) -> GetJobsResponse:
+    async def list_compliance_jobs(self, type: str | None = None, status: str | None = None) -> GetJobsResponse:
         """
         Get a list of compliance jobs.
         Endpoint: GET /2/compliance/jobs
@@ -118,9 +118,7 @@ class XComplianceMixin(XComplianceMixinProtocol):
         try:
             with open(safe_file, "rb") as f:
                 # Direct PUT to upload_url (external to X API v2 base URL)
-                response = await self.http_client.request(
-                    "PUT", safe_url, content=f.read(), headers=headers
-                )
+                response = await self.http_client.request("PUT", safe_url, content=f.read(), headers=headers)
                 response.raise_for_status()
                 return True
         except Exception as e:

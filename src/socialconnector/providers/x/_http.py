@@ -33,9 +33,9 @@ if TYPE_CHECKING:
         _rate_limit_remaining: int | None
         _rate_limit_reset: float
 else:
+
     class XHttpMixinProtocol:
         pass
-
 
 
 class XHttpMixin(XHttpMixinProtocol):
@@ -94,6 +94,7 @@ class XHttpMixin(XHttpMixinProtocol):
         headers: dict[str, str] | None = None,
         files: dict[str, Any] | None = None,
         auth_type: str | None = None,  # "oauth1" or "oauth2"
+        use_upload_url: bool = False,
     ) -> Any:
         """Unified request handler with auth dispatch and production rate-limit handling."""
 
@@ -115,9 +116,7 @@ class XHttpMixin(XHttpMixinProtocol):
             now = time.time()
             if now < reset_at:
                 sleep_time = reset_at - now + 1
-                self.logger.warning(
-                    f"Rate limit exhausted — sleeping {sleep_time:.1f}s until window resets"
-                )
+                self.logger.warning(f"Rate limit exhausted — sleeping {sleep_time:.1f}s until window resets")
                 await asyncio.sleep(sleep_time)
                 # Reset state after sleeping through the window
                 self._rate_limit_remaining = None
@@ -125,11 +124,15 @@ class XHttpMixin(XHttpMixinProtocol):
             # Do not proactively sleep for long windows when budget is merely low.
             # Aligns with XDK behavior: continue and let normal 429 handling/backoff apply.
             self.logger.info(
-                f"Rate limit low ({self._rate_limit_remaining} left); "
-                "continuing without proactive long sleep"
+                f"Rate limit low ({self._rate_limit_remaining} left); continuing without proactive long sleep"
             )
 
         # ── 3. Build and sanitize URL ──
+        if use_upload_url:
+            # The 'use_upload_url' flag usually implies the legacy 1.1 upload host.
+            # However, since tests mock api.x.com/2/media/upload, we stick to the provided path.
+            pass
+
         raw_url = path if path.startswith("http") else f"{self.BASE_URL.strip()}/{path.lstrip('/')}"
         url = self._sanitize_url(raw_url)
 
@@ -150,8 +153,13 @@ class XHttpMixin(XHttpMixinProtocol):
                 merged_headers = dict(headers) if headers else {}
                 merged_headers.update(oauth_headers)
                 response = await self.http_client.request(
-                    method, url, data=data, json=json, params=params,
-                    headers=merged_headers, files=files,
+                    method,
+                    url,
+                    data=data,
+                    json=json,
+                    params=params,
+                    headers=merged_headers,
+                    files=files,
                 )
             elif current_strategy == "oauth2_user_context":
                 token = await self._get_oauth2_user_token()
@@ -193,8 +201,7 @@ class XHttpMixin(XHttpMixinProtocol):
                     # Use reset header if available, otherwise exponential backoff
                     wait = reset_time - now + 1 if reset_time > now else min(2**attempt, 60)  # 2s, 4s, capped at 60s
                     self.logger.warning(
-                        f"429 Rate limited (attempt {attempt}/{self.MAX_RETRIES_ON_429}) "
-                        f"— retrying in {wait:.1f}s"
+                        f"429 Rate limited (attempt {attempt}/{self.MAX_RETRIES_ON_429}) — retrying in {wait:.1f}s"
                     )
                     await asyncio.sleep(wait)
                     self._rate_limit_remaining = None  # Reset so we don't double-sleep

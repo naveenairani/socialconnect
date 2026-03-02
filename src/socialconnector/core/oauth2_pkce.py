@@ -159,9 +159,7 @@ class OAuth2PKCEFlow:
         """
         verifier = code_verifier or self._code_verifier
         if not verifier:
-            raise ValueError(
-                "No code_verifier available. Call get_authorization_url() first."
-            )
+            raise ValueError("No code_verifier available. Call get_authorization_url() first.")
 
         data: dict[str, str] = {
             "grant_type": "authorization_code",
@@ -178,9 +176,7 @@ class OAuth2PKCEFlow:
             # Public client: include client_id in body
             data["client_id"] = self.client_id
 
-        response = await http_client.post(
-            self.token_url, data=data, headers=headers, auth=auth
-        )
+        response = await http_client.post(self.token_url, data=data, headers=headers, auth=auth)
         response.raise_for_status()
         return self._parse_token(response.json())
 
@@ -205,9 +201,7 @@ class OAuth2PKCEFlow:
         else:
             data["client_id"] = self.client_id
 
-        response = await http_client.post(
-            self.token_url, data=data, headers=headers, auth=auth
-        )
+        response = await http_client.post(self.token_url, data=data, headers=headers, auth=auth)
         response.raise_for_status()
         self.token = self._parse_token(response.json())
         return self.token

@@ -1,15 +1,16 @@
 """
 X Notes Mixin for managing Community Notes.
 """
+
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 from socialconnector.core.models import (
-    CommunityNote,
-    DeleteResponse,
     PaginatedResult,
-    Tweet,
 )
+from socialconnector.providers.x.tweets.models import Tweet
+
+from .models import CommunityNote, DeleteResponse
 
 if TYPE_CHECKING:
     import logging
@@ -28,13 +29,14 @@ if TYPE_CHECKING:
         _get_oauth2_user_token: Callable[[], Awaitable[Any]]
         _invalidate_oauth2_user_token: Callable[[], None]
 else:
+
     class XNotesMixinProtocol:
         pass
 
 
-
 class XNotesMixin(XNotesMixinProtocol):
     """Mixin for Community Notes operations."""
+
     async def search_written_notes(
         self,
         test_mode: bool = False,
@@ -61,7 +63,7 @@ class XNotesMixin(XNotesMixinProtocol):
         res = await self._paginate(path, params=params, limit=limit, auth_type="oauth1")
 
         # Convert raw data to CommunityNote objects
-        res.data = [CommunityNote(**item) for item in res.data]
+        res.data = [CommunityNote.model_validate(item) for item in res.data]
         return res
 
     async def create_note(self, text: str) -> CommunityNote:
@@ -77,7 +79,7 @@ class XNotesMixin(XNotesMixinProtocol):
         # /2/notes POST accepts OAuth 1.0a or OAuth 2.0 User Context.
         res = await self._request("POST", path, json=data, auth_type="oauth1")
         note_data = res.get("data", {})
-        return CommunityNote(**note_data, raw=res)
+        return CommunityNote.model_validate(note_data)
 
     async def evaluate_note(self, note_id: str, helpful: bool | None = None, rating: str | None = None) -> bool:
         """
@@ -151,7 +153,7 @@ class XNotesMixin(XNotesMixinProtocol):
 
         # /2/notes/search/posts_eligible_for_notes accepts OAuth 1.0a or OAuth 2.0 User Context.
         res = await self._paginate(path, limit=limit, params=params, auth_type="oauth1")
-        res.data = [Tweet(**item) for item in res.data]
+        res.data = [Tweet.model_validate(item) for item in res.data]
         return res
 
     async def delete_note(self, note_id: str) -> DeleteResponse:
@@ -169,8 +171,3 @@ class XNotesMixin(XNotesMixinProtocol):
         # Twitter API v2 usually returns {"data": {"deleted": True}}
         success = res.get("data", {}).get("deleted", True)
         return DeleteResponse(success=success, raw=res)
-
-
-
-
-

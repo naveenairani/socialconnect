@@ -7,9 +7,10 @@ from httpx import AsyncClient, Response
 from pydantic import SecretStr
 
 from socialconnector.core.exceptions import AuthenticationError, RateLimitError, SocialConnectorError
-from socialconnector.core.models import AdapterConfig, Tweet
+from socialconnector.core.models import AdapterConfig
 from socialconnector.providers.x import XAdapter
-from socialconnector.providers.x._auth import BearerTokenManager
+from socialconnector.providers.x.auth.client_functions import BearerTokenManager
+from socialconnector.providers.x.tweets.models import Tweet
 
 
 @pytest.fixture
@@ -244,9 +245,7 @@ async def test_x_media_upload_v2(x_config, http_client, mock_logger):
         )
     )
     # APPEND
-    respx.post("https://api.x.com/2/media/upload/media_v2_123/append").mock(
-        return_value=Response(200)
-    )
+    respx.post("https://api.x.com/2/media/upload/media_v2_123/append").mock(return_value=Response(200))
     # FINALIZE
     respx.post("https://api.x.com/2/media/upload/media_v2_123/finalize").mock(
         return_value=Response(
@@ -392,7 +391,9 @@ async def test_x_get_messages(x_config, http_client, mock_logger):
     assert messages[1].text == "msg4"
 
     # Test filtering by chat_id
-    respx.get("https://api.x.com/2/dm_conversations/conv789/dm_events?dm_event.fields=id,text,sender_id,created_at,dm_conversation_id,event_type,participant_ids&max_results=50").mock(
+    respx.get(
+        "https://api.x.com/2/dm_conversations/conv789/dm_events?dm_event.fields=id,text,sender_id,created_at,dm_conversation_id,event_type,participant_ids&max_results=50"
+    ).mock(
         return_value=Response(
             200,
             json={
@@ -419,9 +420,9 @@ async def test_x_get_messages(x_config, http_client, mock_logger):
     filtered = await adapter.get_messages(chat_id="conv789")
     assert len(filtered) == 2
 
-    respx.get("https://api.x.com/2/dm_conversations/nonexistent/dm_events?dm_event.fields=id,text,sender_id,created_at,dm_conversation_id,event_type,participant_ids&max_results=50").mock(
-        return_value=Response(200, json={"data": []})
-    )
+    respx.get(
+        "https://api.x.com/2/dm_conversations/nonexistent/dm_events?dm_event.fields=id,text,sender_id,created_at,dm_conversation_id,event_type,participant_ids&max_results=50"
+    ).mock(return_value=Response(200, json={"data": []}))
     filtered_none = await adapter.get_messages(chat_id="nonexistent")
     assert len(filtered_none) == 0
 
@@ -446,7 +447,8 @@ async def test_x_create_compliance_job(x_config, http_client, mock_logger):
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
-    from socialconnector.core.models import CreateJobsRequest
+    from socialconnector.providers.x.compliance.models import CreateJobsRequest
+
     req = CreateJobsRequest(type="tweets", name="test_job")
     job = await adapter.create_compliance_job(body=req)
     assert job.data.id == "job123"
@@ -562,9 +564,7 @@ async def test_bearer_token_fetch_success(mock_logger, http_client):
 @respx.mock
 async def test_bearer_token_fetch_missing_token(mock_logger, http_client):
     """Verify error raised when response lacks access_token."""
-    respx.post("https://api.x.com/oauth2/token").mock(
-        return_value=Response(200, json={"other_field": "value"})
-    )
+    respx.post("https://api.x.com/oauth2/token").mock(return_value=Response(200, json={"other_field": "value"}))
 
     manager = BearerTokenManager("k", "s", http_client, mock_logger)
 
@@ -578,9 +578,7 @@ async def test_bearer_token_fetch_missing_token(mock_logger, http_client):
 @respx.mock
 async def test_bearer_token_fetch_http_error(mock_logger, http_client):
     """Verify HTTP errors are caught and wrapped."""
-    respx.post("https://api.x.com/oauth2/token").mock(
-        return_value=Response(500)
-    )
+    respx.post("https://api.x.com/oauth2/token").mock(return_value=Response(500))
 
     manager = BearerTokenManager("k", "s", http_client, mock_logger)
 
@@ -610,6 +608,7 @@ async def test_rate_limit_error_no_body_leak(x_config, mock_logger, http_client)
 async def test_validate_path_param_rejects_invalid(x_config, mock_logger, http_client):
     """Verify Issue #2: Malicious path parameters are rejected."""
     from socialconnector.core.exceptions import SocialConnectorError
+
     adapter = XAdapter(x_config, http_client, mock_logger)
 
     with pytest.raises(SocialConnectorError) as exc:
@@ -629,6 +628,7 @@ async def test_adapter_config_empty_api_key_allowed():
 async def test_media_polling_max_attempts(x_config, mock_logger, http_client):
     """Verify Issue #5: Media polling terminates after max attempts."""
     from socialconnector.core.exceptions import MediaError
+
     # Mock STATUS returning in_progress forever
     respx.get("https://api.x.com/2/media/upload?command=STATUS&media_id=m1").mock(
         return_value=Response(200, json={"data": {"processing_info": {"state": "in_progress", "check_after_secs": 0}}})
@@ -639,7 +639,8 @@ async def test_media_polling_max_attempts(x_config, mock_logger, http_client):
     adapter.MAX_POLL_ATTEMPTS = 2
 
     with pytest.raises(MediaError) as exc:
-        from socialconnector.core.models import FinalizeUploadResponseDataProcessingInfo
+        from socialconnector.providers.x.media.models import FinalizeUploadResponseDataProcessingInfo
+
         await adapter._poll_media_status(
             "m1", FinalizeUploadResponseDataProcessingInfo(state="in_progress", check_after_secs=0)
         )
@@ -679,6 +680,7 @@ async def test_bearer_token_expiry_refresh(mock_logger, http_client):
 async def test_compliance_upload_rejects_ssrf_url(x_config, mock_logger, http_client):
     """Verify Issue #9: SSRF attempts in compliance URLs are blocked."""
     from socialconnector.core.exceptions import SocialConnectorError
+
     adapter = XAdapter(x_config, http_client, mock_logger)
 
     with pytest.raises(SocialConnectorError) as exc:
@@ -691,6 +693,7 @@ async def test_compliance_upload_rejects_ssrf_url(x_config, mock_logger, http_cl
 async def test_compliance_upload_rejects_path_traversal(x_config, mock_logger, http_client):
     """Verify Issue #10: Path traversal in compliance file paths is blocked."""
     from socialconnector.core.exceptions import SocialConnectorError
+
     adapter = XAdapter(x_config, http_client, mock_logger)
 
     with pytest.raises(SocialConnectorError) as exc:
@@ -775,9 +778,7 @@ async def test_x_create_note_success(x_config, http_client, mock_logger):
 @respx.mock
 async def test_x_evaluate_note_success(x_config, http_client, mock_logger):
     """Test that evaluate_note correctly posts rating."""
-    respx.post("https://api.x.com/2/evaluate_note").mock(
-        return_value=Response(200, json={"data": {"success": True}})
-    )
+    respx.post("https://api.x.com/2/evaluate_note").mock(return_value=Response(200, json={"data": {"success": True}}))
 
     adapter = XAdapter(x_config, http_client, mock_logger)
     success = await adapter.evaluate_note("note123", helpful=True, rating="helpful")
@@ -815,9 +816,7 @@ async def test_x_search_eligible_posts_success(x_config, http_client, mock_logge
 @respx.mock
 async def test_x_delete_note_success(x_config, http_client, mock_logger):
     """Test that delete_note correctly calls DELETE."""
-    respx.delete("https://api.x.com/2/notes/note123").mock(
-        return_value=Response(200, json={"data": {"deleted": True}})
-    )
+    respx.delete("https://api.x.com/2/notes/note123").mock(return_value=Response(200, json={"data": {"deleted": True}}))
 
     adapter = XAdapter(x_config, http_client, mock_logger)
     response = await adapter.delete_note("note123")
@@ -842,7 +841,7 @@ async def test_x_validate_subscription_success(x_config, http_client, mock_logge
 @respx.mock
 async def test_x_create_subscription_success(x_config, http_client, mock_logger):
     """Test that create_subscription correctly calls POST."""
-    from socialconnector.core.models import CreateSubscriptionRequest
+    from socialconnector.providers.x.account_activity.models import CreateSubscriptionRequest
 
     respx.post("https://api.x.com/2/account_activity/webhooks/webhook_123/subscriptions/all").mock(
         return_value=Response(201, json={"data": {"subscribed": True}})
@@ -934,11 +933,13 @@ async def test_x_create_replay_job_success(x_config, http_client, mock_logger):
     assert response.job_id == "replay_job_999"
     assert route.called
     assert "from_date=202310221200" in str(route.calls.last.request.url)
+
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_x_chat_send_message_success(x_config, http_client, mock_logger):
     """Test that send_message correctly calls POST and returns the response."""
-    from socialconnector.core.models import SendMessageRequest
+    from socialconnector.providers.x.chat.models import SendMessageRequest
 
     route = respx.post("https://api.x.com/2/chat/conversations/conv-123/messages").mock(
         return_value=Response(201, json={"data": {"encoded_message_event": "encoded_test_data"}})
@@ -959,22 +960,13 @@ async def test_x_chat_get_conversation_success(x_config, http_client, mock_logge
     route1 = respx.get("https://api.x.com/2/chat/conversations/conv-123?max_results=10").mock(
         return_value=Response(
             200,
-            json={
-                "data": [{"id": "msg-1", "text": "hello"}],
-                "meta": {"next_token": "token-123", "result_count": 1}
-            }
+            json={"data": [{"id": "msg-1", "text": "hello"}], "meta": {"next_token": "token-123", "result_count": 1}},
         )
     )
 
-    route2 = respx.get("https://api.x.com/2/chat/conversations/conv-123?max_results=10&pagination_token=token-123").mock(
-        return_value=Response(
-            200,
-            json={
-                "data": [{"id": "msg-2", "text": "world"}],
-                "meta": {"result_count": 1}
-            }
-        )
-    )
+    route2 = respx.get(
+        "https://api.x.com/2/chat/conversations/conv-123?max_results=10&pagination_token=token-123"
+    ).mock(return_value=Response(200, json={"data": [{"id": "msg-2", "text": "world"}], "meta": {"result_count": 1}}))
 
     adapter = XAdapter(x_config, http_client, mock_logger)
 
@@ -1008,7 +1000,7 @@ async def test_x_chat_get_user_public_keys_success(x_config, http_client, mock_l
 @respx.mock
 async def test_x_chat_add_user_public_key_success(x_config, http_client, mock_logger):
     """Test add_user_public_key calls POST."""
-    from socialconnector.core.models import AddUserPublicKeyRequest
+    from socialconnector.providers.x.chat.models import AddUserPublicKeyRequest
 
     route = respx.post("https://api.x.com/2/users/user-123/public_keys").mock(
         return_value=Response(201, json={"data": {"version": "1.0", "error_code": None}})
@@ -1028,11 +1020,7 @@ async def test_x_chat_get_conversations_success(x_config, http_client, mock_logg
     """Test that get_conversations correctly calls GET."""
     route = respx.get("https://api.x.com/2/chat/conversations?max_results=50").mock(
         return_value=Response(
-            200,
-            json={
-                "data": [{"conversation_id": "conv-1", "type": "GROUP"}],
-                "meta": {"result_count": 1}
-            }
+            200, json={"data": [{"conversation_id": "conv-1", "type": "GROUP"}], "meta": {"result_count": 1}}
         )
     )
 
@@ -1043,6 +1031,8 @@ async def test_x_chat_get_conversations_success(x_config, http_client, mock_logg
 
     assert route.called
     assert len(pages) == 1
+
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_x_communities_get_by_id_success(x_config, http_client, mock_logger):
@@ -1050,9 +1040,7 @@ async def test_x_communities_get_by_id_success(x_config, http_client, mock_logge
     route = respx.get("https://api.x.com/2/communities/comm-123").mock(
         return_value=Response(
             200,
-            json={
-                "data": {"id": "comm-123", "name": "Python Developers", "created_at": "2023-01-01T00:00:00.000Z"}
-            }
+            json={"data": {"id": "comm-123", "name": "Python Developers", "created_at": "2023-01-01T00:00:00.000Z"}},
         )
     )
 
@@ -1071,23 +1059,13 @@ async def test_x_communities_search_success(x_config, http_client, mock_logger):
     """Test that search_communities correctly calls GET and paginates."""
     route1 = respx.get("https://api.x.com/2/communities/search?query=programming&max_results=10").mock(
         return_value=Response(
-            200,
-            json={
-                "data": [{"id": "comm-1", "name": "Python"}],
-                "meta": {"next_token": "token-123"}
-            }
+            200, json={"data": [{"id": "comm-1", "name": "Python"}], "meta": {"next_token": "token-123"}}
         )
     )
 
-    route2 = respx.get("https://api.x.com/2/communities/search?query=programming&max_results=10&pagination_token=token-123").mock(
-        return_value=Response(
-            200,
-            json={
-                "data": [{"id": "comm-2", "name": "JavaScript"}],
-                "meta": {}
-            }
-        )
-    )
+    route2 = respx.get(
+        "https://api.x.com/2/communities/search?query=programming&max_results=10&pagination_token=token-123"
+    ).mock(return_value=Response(200, json={"data": [{"id": "comm-2", "name": "JavaScript"}], "meta": {}}))
 
     adapter = XAdapter(x_config, http_client, mock_logger)
 
@@ -1106,7 +1084,7 @@ async def test_x_communities_search_success(x_config, http_client, mock_logger):
 @respx.mock
 async def test_x_update_subscription_success(x_config, http_client, mock_logger):
     """Test that update_subscription correctly calls PUT."""
-    from socialconnector.core.models import UpdateSubscriptionRequest
+    from socialconnector.providers.x.account_activity.models import UpdateSubscriptionRequest
 
     respx.put("https://api.x.com/2/activity/subscriptions/sub_123").mock(
         return_value=Response(200, json={"data": {"subscribed": True}})
@@ -1123,7 +1101,7 @@ async def test_x_update_subscription_success(x_config, http_client, mock_logger)
 @respx.mock
 async def test_x_create_activity_subscription_success(x_config, http_client, mock_logger):
     """Test that create_activity_subscription correctly calls POST on activity/subscriptions."""
-    from socialconnector.core.models import CreateSubscriptionRequest
+    from socialconnector.providers.x.account_activity.models import CreateSubscriptionRequest
 
     respx.post("https://api.x.com/2/activity/subscriptions").mock(
         return_value=Response(200, json={"data": {"subscribed": True}})
@@ -1160,15 +1138,10 @@ async def test_x_get_activity_subscriptions_success(x_config, http_client, mock_
                 200,
                 json={
                     "data": {"application_id": "app_1", "subscriptions": [{"id": "sub_1"}]},
-                    "meta": {"next_token": "token_1"}
-                }
+                    "meta": {"next_token": "token_1"},
+                },
             ),
-            Response(
-                200,
-                json={
-                    "data": {"application_id": "app_1", "subscriptions": [{"id": "sub_2"}]}
-                }
-            ),
+            Response(200, json={"data": {"application_id": "app_1", "subscriptions": [{"id": "sub_2"}]}}),
         ]
     )
 
@@ -1188,7 +1161,7 @@ async def test_x_activity_stream_success(x_config, http_client, mock_logger):
     """Test that stream correctly yields StreamResponse objects using stream_with_retry."""
     import json
 
-    from socialconnector.core.models import StreamResponse
+    from socialconnector.providers.x.account_activity.models import StreamResponse
 
     # Note: respx doesn't easily mock async streams using stream_with_retry,
     # so we mock httpx.AsyncClient.stream instead
@@ -1213,11 +1186,11 @@ async def test_x_activity_stream_success(x_config, http_client, mock_logger):
     # Mock token method
     async def mock_get_token():
         return "mock_token"
+
     adapter.bearer_token_manager.get = mock_get_token
 
     # Mock the actual stream method from http_client
     adapter.http_client.stream = lambda *args, **kwargs: MockStreamContext()
-
 
     events = []
     async for event in adapter.stream(backfill_minutes=5):
@@ -1236,13 +1209,10 @@ async def test_x_activity_stream_success(x_config, http_client, mock_logger):
 @respx.mock
 async def test_x_create_compliance_job_success(x_config, http_client, mock_logger):
     """Test creating a compliance job returning Pydantic model."""
-    from socialconnector.core.models import CreateJobsRequest
+    from socialconnector.providers.x.compliance.models import CreateJobsRequest
 
     respx.post("https://api.x.com/2/compliance/jobs").mock(
-        return_value=Response(
-            201,
-            json={"data": {"id": "job_123", "type": "tweets", "name": "Test Job"}}
-        )
+        return_value=Response(201, json={"data": {"id": "job_123", "type": "tweets", "name": "Test Job"}})
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
@@ -1259,10 +1229,7 @@ async def test_x_create_compliance_job_success(x_config, http_client, mock_logge
 async def test_x_get_compliance_job_success(x_config, http_client, mock_logger):
     """Test getting a compliance job returning Pydantic model."""
     respx.get("https://api.x.com/2/compliance/jobs/job_123").mock(
-        return_value=Response(
-            200,
-            json={"data": {"id": "job_123", "type": "tweets", "status": "in_progress"}}
-        )
+        return_value=Response(200, json={"data": {"id": "job_123", "type": "tweets", "status": "in_progress"}})
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
@@ -1277,15 +1244,7 @@ async def test_x_get_compliance_job_success(x_config, http_client, mock_logger):
 async def test_x_list_compliance_jobs_success(x_config, http_client, mock_logger):
     """Test listing compliance jobs returning Pydantic model."""
     respx.get("https://api.x.com/2/compliance/jobs?type=users").mock(
-        return_value=Response(
-            200,
-            json={
-                "data": [
-                    {"id": "job_1", "type": "users"},
-                    {"id": "job_2", "type": "users"}
-                ]
-            }
-        )
+        return_value=Response(200, json={"data": [{"id": "job_1", "type": "users"}, {"id": "job_2", "type": "users"}]})
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
@@ -1302,19 +1261,8 @@ async def test_x_get_connection_history_success(x_config, http_client, mock_logg
     """Test get_connection_history returns paginated response and yields objects."""
     respx.get("https://api.x.com/2/connections").mock(
         side_effect=[
-            Response(
-                200,
-                json={
-                    "data": [{"id": "conn_1", "status": "active"}],
-                    "meta": {"next_token": "token_123"}
-                }
-            ),
-            Response(
-                200,
-                json={
-                    "data": [{"id": "conn_2", "status": "inactive"}]
-                }
-            ),
+            Response(200, json={"data": [{"id": "conn_1", "status": "active"}], "meta": {"next_token": "token_123"}}),
+            Response(200, json={"data": [{"id": "conn_2", "status": "inactive"}]}),
         ]
     )
 
@@ -1335,10 +1283,7 @@ async def test_x_get_connection_history_success(x_config, http_client, mock_logg
 async def test_x_delete_all_connections_success(x_config, http_client, mock_logger):
     """Test delete_all_connections calls correct route."""
     route = respx.delete("https://api.x.com/2/connections/all").mock(
-        return_value=Response(
-            200,
-            json={"data": {"successful_kills": 5, "failed_kills": 0, "results": []}}
-        )
+        return_value=Response(200, json={"data": {"successful_kills": 5, "failed_kills": 0, "results": []}})
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
@@ -1353,10 +1298,7 @@ async def test_x_delete_all_connections_success(x_config, http_client, mock_logg
 async def test_x_delete_connections_by_endpoint_success(x_config, http_client, mock_logger):
     """Test delete_connections_by_endpoint calls correct route with ID parameter."""
     route = respx.delete("https://api.x.com/2/connections/endpoint_1").mock(
-        return_value=Response(
-            200,
-            json={"data": {"successful_kills": 2, "failed_kills": 1, "results": []}}
-        )
+        return_value=Response(200, json={"data": {"successful_kills": 2, "failed_kills": 1, "results": []}})
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
@@ -1371,13 +1313,10 @@ async def test_x_delete_connections_by_endpoint_success(x_config, http_client, m
 @respx.mock
 async def test_x_delete_connections_by_uuids_success(x_config, http_client, mock_logger):
     """Test delete_connections_by_uuids properly mounts request payloads."""
-    from socialconnector.core.models import DeleteByUuidsRequest
+    from socialconnector.providers.x.connections.models import DeleteByUuidsRequest
 
     route = respx.delete("https://api.x.com/2/connections").mock(
-        return_value=Response(
-            200,
-            json={"data": {"successful_kills": 3, "failed_kills": 0, "results": []}}
-        )
+        return_value=Response(200, json={"data": {"successful_kills": 3, "failed_kills": 0, "results": []}})
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
@@ -1489,7 +1428,7 @@ async def test_x_dms_create_conversation(x_config, http_client, mock_logger):
         return_value=Response(201, json={"data": {"dm_conversation_id": "conv456", "dm_event_id": "e1"}})
     )
 
-    from socialconnector.core.models import CreateConversationRequest
+    from socialconnector.providers.x.dms.models import CreateConversationRequest
 
     adapter = XAdapter(x_config, http_client, mock_logger)
     req = CreateConversationRequest(conversation_type="Group", message="Hello", participant_ids="111,222")
@@ -1506,7 +1445,7 @@ async def test_x_dms_create_by_conversation_id(x_config, http_client, mock_logge
         return_value=Response(201, json={"data": {"dm_conversation_id": conv_id, "dm_event_id": "e1"}})
     )
 
-    from socialconnector.core.models import CreateByConversationIdRequest
+    from socialconnector.providers.x.dms.models import CreateByConversationIdRequest
 
     adapter = XAdapter(x_config, http_client, mock_logger)
     req = CreateByConversationIdRequest(text="Hello again")
@@ -1523,7 +1462,7 @@ async def test_x_dms_create_by_participant_id(x_config, http_client, mock_logger
         return_value=Response(201, json={"data": {"dm_conversation_id": "conv_456", "dm_event_id": "e1"}})
     )
 
-    from socialconnector.core.models import CreateByParticipantIdRequest
+    from socialconnector.providers.x.dms.models import CreateByParticipantIdRequest
 
     adapter = XAdapter(x_config, http_client, mock_logger)
     req = CreateByParticipantIdRequest(text="Hello again")
@@ -1761,7 +1700,7 @@ async def test_get_list_followers_basic(x_config, http_client, mock_logger):
             json={
                 "data": [
                     {"id": "u1", "name": "Alice", "username": "alice"},
-                    {"id": "u2", "name": "Bob",   "username": "bob"},
+                    {"id": "u2", "name": "Bob", "username": "bob"},
                 ],
                 "meta": {"result_count": 2},
             },
@@ -1951,11 +1890,10 @@ async def test_update_list_basic(x_config, http_client, mock_logger):
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
-    result = await adapter.update_list(
-        "list123", name="New Name", description="Updated description", private=True
-    )
+    result = await adapter.update_list("list123", name="New Name", description="Updated description", private=True)
 
     import json
+
     assert result is True
     assert route.called
     req_json = json.loads(route.calls[0].request.content)
@@ -2028,6 +1966,7 @@ async def test_add_list_member_basic(x_config, http_client, mock_logger):
     assert route.called
 
     import json
+
     req_json = json.loads(route.calls[0].request.content)
     assert req_json["user_id"] == "u999"
 
@@ -2054,9 +1993,7 @@ async def test_add_list_member_invalid_id(x_config, http_client, mock_logger):
 async def test_create_list_basic(x_config, http_client, mock_logger):
     """Creates a new list successfully."""
     route = respx.post("https://api.x.com/2/lists").mock(
-        return_value=Response(
-            200, json={"data": {"id": "list123", "name": "New List"}}
-        )
+        return_value=Response(200, json={"data": {"id": "list123", "name": "New List"}})
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
@@ -2067,6 +2004,7 @@ async def test_create_list_basic(x_config, http_client, mock_logger):
     assert route.called
 
     import json
+
     req_json = json.loads(route.calls[0].request.content)
     assert req_json["name"] == "New List"
     assert req_json["description"] == "My desc"
@@ -2081,9 +2019,7 @@ async def test_create_list_basic(x_config, http_client, mock_logger):
 async def test_get_media_by_keys(x_config, http_client, mock_logger):
     """Retrieves media by keys successfully."""
     route = respx.get("https://api.x.com/2/media").mock(
-        return_value=Response(
-            200, json={"data": [{"media_key": "3_12345", "type": "photo"}]}
-        )
+        return_value=Response(200, json={"data": [{"media_key": "3_12345", "type": "photo"}]})
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
@@ -2105,9 +2041,7 @@ async def test_get_media_by_keys(x_config, http_client, mock_logger):
 async def test_get_media_analytics(x_config, http_client, mock_logger):
     """Retrieves media analytics successfully."""
     route = respx.get("https://api.x.com/2/media/analytics").mock(
-        return_value=Response(
-            200, json={"data": [{"media_key": "3_12345", "view_count": 100}]}
-        )
+        return_value=Response(200, json={"data": [{"media_key": "3_12345", "view_count": 100}]})
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
@@ -2138,9 +2072,7 @@ async def test_get_media_analytics(x_config, http_client, mock_logger):
 async def test_get_media_by_key_basic(x_config, http_client, mock_logger):
     """Retrieves single media by key successfully."""
     route = respx.get("https://api.x.com/2/media/3_12345").mock(
-        return_value=Response(
-            200, json={"data": {"media_key": "3_12345", "type": "photo"}}
-        )
+        return_value=Response(200, json={"data": {"media_key": "3_12345", "type": "photo"}})
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
@@ -2175,9 +2107,7 @@ async def test_get_media_by_key_invalid_id(x_config, http_client, mock_logger):
 @respx.mock
 async def test_append_upload_success(x_config, http_client, mock_logger):
     """Successfully appends media chunk."""
-    route = respx.post("https://api.x.com/2/media/upload/3_12345/append").mock(
-        return_value=Response(204)
-    )
+    route = respx.post("https://api.x.com/2/media/upload/3_12345/append").mock(return_value=Response(204))
 
     adapter = XAdapter(x_config, http_client, mock_logger)
     result = await adapter.append_upload("3_12345", b"test data", 0)
@@ -2196,9 +2126,7 @@ async def test_append_upload_success(x_config, http_client, mock_logger):
 @respx.mock
 async def test_append_upload_error(x_config, http_client, mock_logger):
     """Handles HTTP error during append."""
-    respx.post("https://api.x.com/2/media/upload/3_12345/append").mock(
-        return_value=Response(400)
-    )
+    respx.post("https://api.x.com/2/media/upload/3_12345/append").mock(return_value=Response(400))
 
     adapter = XAdapter(x_config, http_client, mock_logger)
     from socialconnector.core.exceptions import SocialConnectorError
@@ -2252,9 +2180,7 @@ async def test_finalize_upload_invalid_id(x_config, http_client, mock_logger):
 async def test_get_upload_status_success(x_config, http_client, mock_logger):
     """Successfully gets media upload status."""
     route = respx.get("https://api.x.com/2/media/upload").mock(
-        return_value=Response(
-            200, json={"data": {"processing_info": {"state": "in_progress", "progress_percent": 50}}}
-        )
+        return_value=Response(200, json={"data": {"processing_info": {"state": "in_progress", "progress_percent": 50}}})
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
@@ -2274,9 +2200,7 @@ async def test_get_upload_status_success(x_config, http_client, mock_logger):
 async def test_get_upload_status_flat_response(x_config, http_client, mock_logger):
     """Successfully gets media upload status from flat response."""
     respx.get("https://api.x.com/2/media/upload").mock(
-        return_value=Response(
-            200, json={"data": {"processing_info": {"state": "succeeded"}}}
-        )
+        return_value=Response(200, json={"data": {"processing_info": {"state": "succeeded"}}})
     )
 
     adapter = XAdapter(x_config, http_client, mock_logger)
@@ -2293,12 +2217,11 @@ async def test_get_upload_status_flat_response(x_config, http_client, mock_logge
 async def test_upload_success(x_config, http_client, mock_logger):
     """Successfully initiates media upload via upload()."""
     route = respx.post("https://api.x.com/2/media/upload").mock(
-        return_value=Response(
-            200, json={"data": {"id": "3_12345"}}
-        )
+        return_value=Response(200, json={"data": {"id": "3_12345"}})
     )
 
-    from socialconnector.core.models import UploadRequest
+    from socialconnector.providers.x.media.models import UploadRequest
+
     adapter = XAdapter(x_config, http_client, mock_logger)
     req = UploadRequest(media="basedata", media_category="TweetImage", media_type="image/jpeg")
     result = await adapter.upload(req)
@@ -2307,6 +2230,7 @@ async def test_upload_success(x_config, http_client, mock_logger):
     assert route.called
 
     import json
+
     request = route.calls[0].request
     req_json = json.loads(request.content)
     assert req_json["media_category"] == "TweetImage"
@@ -2322,12 +2246,11 @@ async def test_upload_success(x_config, http_client, mock_logger):
 async def test_create_metadata_success(x_config, http_client, mock_logger):
     """Successfully creates media metadata."""
     route = respx.post("https://api.x.com/2/media/metadata").mock(
-        return_value=Response(
-            201, json={"data": {"success": True}}
-        )
+        return_value=Response(201, json={"data": {"success": True}})
     )
 
-    from socialconnector.core.models import CreateMetadataRequest, CreateMetadataRequestMetadata
+    from socialconnector.providers.x.media.models import CreateMetadataRequest, CreateMetadataRequestMetadata
+
     adapter = XAdapter(x_config, http_client, mock_logger)
     metadata = CreateMetadataRequestMetadata(alt_text={"text": "A description"})
     req = CreateMetadataRequest(id="3_12345", metadata=metadata)
@@ -2337,10 +2260,12 @@ async def test_create_metadata_success(x_config, http_client, mock_logger):
     assert route.called
 
     import json
+
     request = route.calls[0].request
     req_json = json.loads(request.content)
     assert req_json["id"] == "3_12345"
     assert req_json["metadata"]["alt_text"]["text"] == "A description"
+
 
 # ── create_subtitles tests ───────────────────────────────────────────────────
 
@@ -2362,7 +2287,8 @@ async def test_create_subtitles_success(x_config, http_client, mock_logger):
         )
     )
 
-    from socialconnector.core.models import CreateSubtitlesRequest, CreateSubtitlesRequestSubtitles
+    from socialconnector.providers.x.media.models import CreateSubtitlesRequest, CreateSubtitlesRequestSubtitles
+
     adapter = XAdapter(x_config, http_client, mock_logger)
     subs = CreateSubtitlesRequestSubtitles(language_code="en", display_name="English")
     req = CreateSubtitlesRequest(id="3_12345", subtitles=subs)
@@ -2372,6 +2298,7 @@ async def test_create_subtitles_success(x_config, http_client, mock_logger):
     assert route.called
 
     import json
+
     request = route.calls[0].request
     req_json = json.loads(request.content)
     assert req_json["id"] == "3_12345"
@@ -2386,12 +2313,11 @@ async def test_create_subtitles_success(x_config, http_client, mock_logger):
 async def test_delete_subtitles_success(x_config, http_client, mock_logger):
     """Successfully deletes media subtitles."""
     route = respx.delete("https://api.x.com/2/media/subtitles").mock(
-        return_value=Response(
-            200, json={"data": {"deleted": True}}
-        )
+        return_value=Response(200, json={"data": {"deleted": True}})
     )
 
-    from socialconnector.core.models import DeleteSubtitlesRequest
+    from socialconnector.providers.x.media.models import DeleteSubtitlesRequest
+
     adapter = XAdapter(x_config, http_client, mock_logger)
 
     req = DeleteSubtitlesRequest(id="3_12345", media_category="TweetVideo", language_code="en")
@@ -2401,6 +2327,7 @@ async def test_delete_subtitles_success(x_config, http_client, mock_logger):
     assert route.called
 
     import json
+
     request = route.calls[0].request
     req_json = json.loads(request.content)
     assert req_json["id"] == "3_12345"
@@ -2415,12 +2342,11 @@ async def test_delete_subtitles_success(x_config, http_client, mock_logger):
 async def test_initialize_upload_success(x_config, http_client, mock_logger):
     """Successfully initializes media upload via initialize_upload()."""
     route = respx.post("https://api.x.com/2/media/upload/initialize").mock(
-        return_value=Response(
-            200, json={"data": {"id": "3_12345"}}
-        )
+        return_value=Response(200, json={"data": {"id": "3_12345"}})
     )
 
-    from socialconnector.core.models import InitializeUploadRequest
+    from socialconnector.providers.x.media.models import InitializeUploadRequest
+
     adapter = XAdapter(x_config, http_client, mock_logger)
     req = InitializeUploadRequest(total_bytes=1024, media_type="image/jpeg", media_category="TweetVideo")
     result = await adapter.initialize_upload(req)
@@ -2429,6 +2355,7 @@ async def test_initialize_upload_success(x_config, http_client, mock_logger):
     assert route.called
 
     import json
+
     request = route.calls[0].request
     req_json = json.loads(request.content)
     assert "total_bytes" in req_json

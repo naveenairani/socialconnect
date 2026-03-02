@@ -5,7 +5,7 @@ X Connections Mixin for managing streaming connections.
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any
 
-from socialconnector.core.models import (
+from .models import (
     DeleteAllResponse,
     DeleteByEndpointResponse,
     DeleteByUuidsRequest,
@@ -31,9 +31,9 @@ if TYPE_CHECKING:
         _get_oauth2_user_token: Any
         _invalidate_oauth2_user_token: Any
 else:
+
     class XConnectionsMixinProtocol:
         pass
-
 
 
 class XConnectionsMixin(XConnectionsMixinProtocol):

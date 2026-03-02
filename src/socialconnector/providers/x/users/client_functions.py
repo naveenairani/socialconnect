@@ -18,6 +18,7 @@ if TYPE_CHECKING:
         _get_oauth2_user_token: Callable[[], Awaitable[Any]]
         _invalidate_oauth2_user_token: Callable[[], None]
 else:
+
     class XUsersProtocol:
         pass
 
@@ -181,7 +182,10 @@ class XUsersMixin(XUsersProtocol):
             return False
 
     async def get_list_followers(
-        self, list_id: str, *, limit: int = 100,
+        self,
+        list_id: str,
+        *,
+        limit: int = 100,
         user_fields: list[str] | None = None,
         expansions: list[str] | None = None,
         tweet_fields: list[str] | None = None,
@@ -197,7 +201,8 @@ class XUsersMixin(XUsersProtocol):
         return await self._paginate(path, params=p or None, limit=limit)
 
     async def get_list_by_id(
-        self, list_id: str,
+        self,
+        list_id: str,
         list_fields: list[str] | None = None,
         expansions: list[str] | None = None,
         user_fields: list[str] | None = None,
@@ -240,11 +245,7 @@ class XUsersMixin(XUsersProtocol):
         private: bool | None = None,
     ) -> dict[Any, Any]:
         """Create a new list."""
-        data = {
-            k: v
-            for k, v in [("name", name), ("description", description), ("private", private)]
-            if v is not None
-        }
+        data = {k: v for k, v in [("name", name), ("description", description), ("private", private)] if v is not None}
         try:
             res = await self._request("POST", "lists", json=data, auth_type="oauth1")
             return dict(res.get("data", {}))

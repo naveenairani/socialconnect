@@ -2,10 +2,9 @@
 X General API Mixin for OpenAPI specification retrieval.
 """
 
-
 from typing import TYPE_CHECKING, Any
 
-from socialconnector.core.models import GetOpenApiSpecResponse
+from .models import GetOpenApiSpecResponse
 
 if TYPE_CHECKING:
     import logging
@@ -25,9 +24,9 @@ if TYPE_CHECKING:
         _get_oauth2_user_token: Any
         _invalidate_oauth2_user_token: Any
 else:
+
     class XGeneralMixinProtocol:
         pass
-
 
 
 class XGeneralMixin(XGeneralMixinProtocol):

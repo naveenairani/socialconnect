@@ -2,11 +2,9 @@
 X News Mixin for fetching AI-generated news stories from the X API v2.
 """
 
-
-
 from typing import TYPE_CHECKING, Any
 
-from socialconnector.core.models import (
+from .models import (
     NewsGetResponse,
     NewsSearchResponse,
 )
@@ -29,9 +27,9 @@ if TYPE_CHECKING:
         _get_oauth2_user_token: Any
         _invalidate_oauth2_user_token: Any
 else:
+
     class XNewsMixinProtocol:
         pass
-
 
 
 class XNewsMixin(XNewsMixinProtocol):

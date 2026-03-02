@@ -7,12 +7,15 @@ from typing import TYPE_CHECKING, Any
 
 from socialconnector.core.exceptions import MessageError
 from socialconnector.core.models import (
-    GetByIdsResponse,
-    HideReplyRequest,
-    HideReplyResponse,
     Media,
     MessageResponse,
     PaginatedResult,
+)
+from socialconnector.providers.x.shared_models import GetByIdsResponse
+
+from .models import (
+    HideReplyRequest,
+    HideReplyResponse,
     Tweet,
     TweetAnalyticsResponse,
     TweetCountsAllResponse,
@@ -46,10 +49,13 @@ if TYPE_CHECKING:
         _validate_path_param: Callable[[str, Any], str]
         _get_oauth2_user_token: Callable[[], Awaitable[Any]]
         _invalidate_oauth2_user_token: Callable[[], None]
+
         async def _upload_media(self, media: Media) -> str: ...
 else:
+
     class XTweetsMixinProtocol:
         pass
+
 
 class XTweetsMixin(XTweetsMixinProtocol):
     """Mixin for tweet-related operations (post, delete, lookup, search)."""
@@ -133,7 +139,7 @@ class XTweetsMixin(XTweetsMixinProtocol):
         }
         res = await self._request("GET", f"tweets/{self._validate_path_param('tweet_id', tweet_id)}", params=params)
         data = res.get("data", {})
-        return Tweet(**data, raw=res)
+        return Tweet.model_validate(data)
 
     async def get_tweet_analytics(
         self,
@@ -246,7 +252,7 @@ class XTweetsMixin(XTweetsMixinProtocol):
         }
         res = await self._request("GET", "tweets", params=params)
         data = res.get("data", [])
-        return [Tweet(**tweet, raw=res) for tweet in data]
+        return [Tweet.model_validate(tweet) for tweet in data]
 
     async def get_tweets_by_ids(
         self,
@@ -319,7 +325,10 @@ class XTweetsMixin(XTweetsMixinProtocol):
         return await self._paginate(path, params, limit=limit)
 
     async def get_list_tweets(
-        self, list_id: str, *, limit: int = 100,
+        self,
+        list_id: str,
+        *,
+        limit: int = 100,
         tweet_fields: list[str] | None = None,
         expansions: list[str] | None = None,
         media_fields: list[str] | None = None,

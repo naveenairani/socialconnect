@@ -4,7 +4,7 @@ X Usage Mixin for retrieving API usage statistics from the X API v2.
 
 from typing import TYPE_CHECKING, Any
 
-from socialconnector.core.models import UsageGetResponse
+from .models import UsageGetResponse
 
 if TYPE_CHECKING:
     import logging
@@ -24,9 +24,9 @@ if TYPE_CHECKING:
         _get_oauth2_user_token: Any
         _invalidate_oauth2_user_token: Any
 else:
+
     class XUsageMixinProtocol:
         pass
-
 
 
 class XUsageMixin(XUsageMixinProtocol):
@@ -50,7 +50,5 @@ class XUsageMixin(XUsageMixinProtocol):
         if usage_fields:
             p["usage.fields"] = ",".join(usage_fields)
 
-        res = await self._request(
-            "GET", "usage/tweets", params=p or None, auth_type="bearer_token"
-        )
+        res = await self._request("GET", "usage/tweets", params=p or None, auth_type="bearer_token")
         return UsageGetResponse.model_validate(res)

@@ -5,8 +5,9 @@ X Stream Mixin for managing filtered stream rules and polling.
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from socialconnector.core.models import StreamRule
 from socialconnector.core.streaming import StreamConfig, StreamError, stream_with_retry
+
+from .models import StreamRule
 
 if TYPE_CHECKING:
     import logging
@@ -26,9 +27,9 @@ if TYPE_CHECKING:
         _get_oauth2_user_token: Any
         _invalidate_oauth2_user_token: Any
 else:
+
     class XStreamMixinProtocol:
         pass
-
 
 
 class XStreamMixin(XStreamMixinProtocol):
