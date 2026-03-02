@@ -618,11 +618,10 @@ async def test_validate_path_param_rejects_invalid(x_config, mock_logger, http_c
 
 
 @pytest.mark.asyncio
-async def test_adapter_config_empty_api_key_rejected():
-    """Verify Issue #2: Empty configuration fields are rejected by Pydantic."""
-    from pydantic import ValidationError
-    with pytest.raises(ValidationError):
-        AdapterConfig(provider="x", api_key="  ")
+async def test_adapter_config_empty_api_key_allowed():
+    """Verify that an empty api_key is now allowed by Pydantic."""
+    config = AdapterConfig(provider="x")
+    assert config.api_key is None
 
 
 @pytest.mark.asyncio

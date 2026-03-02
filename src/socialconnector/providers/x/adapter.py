@@ -24,6 +24,7 @@ from ._http import XHttpMixin
 from ._media import XMediaMixin
 from ._news import XNewsMixin
 from ._notes import XNotesMixin
+from ._spaces import XSpacesMixin
 from ._stream import XStreamMixin
 from ._tweets import XTweetsMixin
 from ._usage import XUsageMixin
@@ -46,6 +47,7 @@ class XAdapter(
     XCommunitiesMixin,
     XConnectionsMixin,
     XGeneralMixin,
+    XSpacesMixin,
     BaseAdapter,
 ):
     """X (formerly Twitter) adapter using API v2."""
@@ -58,21 +60,100 @@ class XAdapter(
     ) -> None:
         super().__init__(config, http_client, logger)
 
-        # Determine auth strategy
-        self.access_token = config.extra.get("access_token")
-        self.access_token_secret = config.extra.get("access_token_secret")
-        pre_supplied_bearer = config.extra.get("bearer_token")
-        self._oauth2_user_access_token = (
-            config.extra.get("oauth2_user_access_token")
-            or config.extra.get("user_access_token")
-        )
+        self.access_token: str | None = None
+        self.access_token_secret: str | None = None
+        self._oauth2_user_access_token: str | None = None
         self._oauth2_pkce_flow: OAuth2PKCEFlow | None = None
+        self.auth_strategy: str = "oauth2"
+        self.auth: OAuth1Auth | None = None
 
-        if self.access_token and self.access_token_secret:
+        # Always initialize token manager (used for OAuth2 and some v2 endpoints)
+        self.bearer_token_manager = BearerTokenManager(
+            api_key=config.api_key or "",
+            api_secret=config.api_secret or "",
+            http_client=self.http_client,
+            logger=self.logger,
+            pre_supplied_token=None,
+        )
+
+        # Rate limit tracking
+        self._rate_limit_remaining: int | None = None
+        self._rate_limit_reset: float = 0
+        self._last_request_time: float = 0
+
+        # Attempt auto-setup from config or environment
+        self.setup(
+            api_key=config.api_key,
+            api_secret=config.api_secret,
+            access_token=config.extra.get("access_token"),
+            access_token_secret=config.extra.get("access_token_secret"),
+            bearer_token=config.extra.get("bearer_token"),
+            oauth2_user_access_token=(
+                config.extra.get("oauth2_user_access_token")
+                or config.extra.get("user_access_token")
+            )
+        )
+        self._init_oauth2_user_pkce(config)
+
+    def setup(
+        self,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+        access_token: str | None = None,
+        access_token_secret: str | None = None,
+        bearer_token: str | None = None,
+        oauth2_user_access_token: str | None = None,
+    ) -> None:
+        """
+        Configure X adapter credentials. Falls back to environment variables.
+        """
+        import os
+
+        # Use explicitly provided keys, or fallback to config, or fallback to ENV
+        final_api_key = (
+            api_key
+            or self.config.api_key
+            or os.getenv("X_API_KEY")
+            or os.getenv("TWITTER_API_KEY")
+        )
+        final_api_secret = (
+            api_secret
+            or self.config.api_secret
+            or os.getenv("X_API_SECRET")
+            or os.getenv("TWITTER_API_SECRET")
+        )
+        final_access_tok = (
+            access_token
+            or os.getenv("X_ACCESS_TOKEN")
+            or os.getenv("TWITTER_ACCESS_TOKEN")
+        )
+        final_access_sec = (
+            access_token_secret
+            or os.getenv("X_ACCESS_TOKEN_SECRET")
+            or os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
+        )
+        final_bearer = (
+            bearer_token
+            or os.getenv("X_BEARER_TOKEN")
+            or os.getenv("TWITTER_BEARER_TOKEN")
+        )
+
+        self.access_token = final_access_tok
+        self.access_token_secret = final_access_sec
+        self._oauth2_user_access_token = oauth2_user_access_token
+
+        # Update core config so it can be used generically
+        if final_api_key:
+            self.config.api_key = final_api_key
+        if final_api_secret:
+            self.config.api_secret = final_api_secret
+
+        if final_api_key and final_api_secret and self.access_token and self.access_token_secret:
             self.auth_strategy = "oauth1"
+            self.logger.debug("Using OAuth1 User-context auth for X")
             self.auth = OAuth1Auth(
-                client_key=config.api_key,
-                client_secret=config.api_secret or "",
+                client_key=final_api_key,
+                client_secret=final_api_secret,
                 resource_owner_key=self.access_token,
                 resource_owner_secret=self.access_token_secret,
             )
@@ -80,20 +161,19 @@ class XAdapter(
             self.auth_strategy = "oauth2"
             self.logger.debug("Using OAuth2 App-only auth for X")
 
-        # Always initialize token manager (used for OAuth2 and some v2 endpoints)
+        # Re-initialize token manager with new keys
         self.bearer_token_manager = BearerTokenManager(
-            api_key=config.api_key,
-            api_secret=config.api_secret or "",
+            api_key=final_api_key or "",
+            api_secret=final_api_secret or "",
             http_client=self.http_client,
             logger=self.logger,
-            pre_supplied_token=pre_supplied_bearer,
+            pre_supplied_token=final_bearer,
         )
-        self._init_oauth2_user_pkce(config)
 
         # Rate limit tracking
-        self._rate_limit_remaining: int | None = None
-        self._rate_limit_reset: float = 0
-        self._last_request_time: float = 0
+        self._rate_limit_remaining = None
+        self._rate_limit_reset = 0
+        self._last_request_time = 0
 
     async def _get_oauth2_user_token(self) -> str:
         """Return a configured OAuth2 user-context access token."""

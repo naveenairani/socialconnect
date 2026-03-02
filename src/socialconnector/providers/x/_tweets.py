@@ -2,8 +2,8 @@
 X Tweets Mixin for managing posts, timelines, and searches.
 """
 
-from collections.abc import AsyncIterator
-from typing import Any
+from collections.abc import AsyncIterator, Callable
+from typing import TYPE_CHECKING, Any, Awaitable, cast
 
 from socialconnector.core.exceptions import MessageError
 from socialconnector.core.models import (
@@ -30,8 +30,28 @@ from socialconnector.core.models import (
     TweetSearchRecentResponse,
 )
 
+if TYPE_CHECKING:
+    import logging
 
-class XTweetsMixin:
+    class XTweetsMixinProtocol:
+        logger: logging.Logger
+        http_client: Any
+        bearer_token_manager: Any
+        auth_strategy: str
+        auth: Any
+        config: Any
+        BASE_URL: str
+        _request: Callable[..., Awaitable[Any]]
+        _paginate: Callable[..., Awaitable[PaginatedResult]]
+        _validate_path_param: Callable[[str, Any], str]
+        _get_oauth2_user_token: Callable[[], Awaitable[Any]]
+        _invalidate_oauth2_user_token: Callable[[], None]
+        async def _upload_media(self, media: Media) -> str: ...
+else:
+    class XTweetsMixinProtocol:
+        pass
+
+class XTweetsMixin(XTweetsMixinProtocol):
     """Mixin for tweet-related operations (post, delete, lookup, search)."""
 
     async def post(

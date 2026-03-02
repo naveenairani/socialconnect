@@ -3,7 +3,8 @@ X Account Activity Mixin for webhooks and subscriptions.
 """
 
 
-from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING, Any, Awaitable
+from collections.abc import AsyncGenerator, Callable
 
 from socialconnector.core.models import (
     CreateReplayJobResponse,
@@ -12,6 +13,7 @@ from socialconnector.core.models import (
     DeleteSubscriptionResponse,
     GetSubscriptionCountResponse,
     GetSubscriptionsResponse,
+    PaginatedResult,
     StreamResponse,
     UpdateSubscriptionRequest,
     UpdateSubscriptionResponse,
@@ -19,8 +21,29 @@ from socialconnector.core.models import (
 )
 from socialconnector.core.streaming import StreamConfig, stream_with_retry
 
+if TYPE_CHECKING:
+    import logging
 
-class XAccountActivityMixin:
+    class XAccountActivityMixinProtocol:
+        logger: logging.Logger
+        http_client: Any
+        bearer_token_manager: Any
+        auth_strategy: str
+        auth: Any
+        config: Any
+        BASE_URL: str
+        _request: Callable[..., Awaitable[Any]]
+        _paginate: Callable[..., Awaitable[PaginatedResult]]
+        _validate_path_param: Callable[[str, Any], str]
+        _get_oauth2_user_token: Callable[[], Awaitable[Any]]
+        _invalidate_oauth2_user_token: Callable[[], None]
+else:
+    class XAccountActivityMixinProtocol:
+        pass
+
+
+
+class XAccountActivityMixin(XAccountActivityMixinProtocol):
     """Mixin for account activity operations (webhooks and subscriptions)."""
 
     async def validate_subscription(self, webhook_id: str) -> ValidateSubscriptionResponse:
@@ -175,7 +198,7 @@ class XAccountActivityMixin:
         current_pagination_token = pagination_token
 
         while True:
-            params = {}
+            params: dict[str, Any] = {}
             if max_results is not None:
                 params["max_results"] = max_results
             if current_pagination_token:
@@ -227,7 +250,7 @@ class XAccountActivityMixin:
             "Accept": "application/json",
         }
 
-        params = {}
+        params: dict[str, Any] = {}
         if backfill_minutes is not None:
             params["backfill_minutes"] = backfill_minutes
         if start_time is not None:

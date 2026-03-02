@@ -1,7 +1,8 @@
 """
 X Notes Mixin for managing Community Notes.
 """
-from typing import Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Awaitable, cast
 
 from socialconnector.core.models import (
     CommunityNote,
@@ -10,8 +11,29 @@ from socialconnector.core.models import (
     Tweet,
 )
 
+if TYPE_CHECKING:
+    import logging
 
-class XNotesMixin:
+    class XNotesMixinProtocol:
+        logger: logging.Logger
+        http_client: Any
+        bearer_token_manager: Any
+        auth_strategy: str
+        auth: Any
+        config: Any
+        BASE_URL: str
+        _request: Callable[..., Awaitable[Any]]
+        _paginate: Callable[..., Awaitable[PaginatedResult]]
+        _validate_path_param: Callable[[str, Any], str]
+        _get_oauth2_user_token: Callable[[], Awaitable[Any]]
+        _invalidate_oauth2_user_token: Callable[[], None]
+else:
+    class XNotesMixinProtocol:
+        pass
+
+
+
+class XNotesMixin(XNotesMixinProtocol):
     """Mixin for Community Notes operations."""
     async def search_written_notes(
         self,
@@ -70,7 +92,7 @@ class XNotesMixin:
             True if successful.
         """
         path = "evaluate_note"
-        data = {"note_id": note_id}
+        data: dict[str, Any] = {"note_id": note_id}
         if helpful is not None:
             data["helpful"] = helpful
         if rating:
@@ -78,7 +100,7 @@ class XNotesMixin:
 
         # Endpoint requires User Context
         res = await self._request("POST", path, json=data, auth_type="oauth1")
-        return res.get("data", {}).get("success", True)
+        return bool(res.get("data", {}).get("success", True))
 
     async def search_eligible_posts(
         self,

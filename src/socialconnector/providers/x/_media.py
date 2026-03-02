@@ -3,6 +3,8 @@ X Media Mixin for chunked uploads to the v2 media/upload endpoint.
 """
 
 import asyncio
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Awaitable, cast
 
 from socialconnector.core.exceptions import MediaError
 from socialconnector.core.models import (
@@ -22,12 +24,34 @@ from socialconnector.core.models import (
     InitializeUploadRequest,
     InitializeUploadResponse,
     Media,
+    PaginatedResult,
     UploadRequest,
     UploadResponse,
 )
 
+if TYPE_CHECKING:
+    import logging
 
-class XMediaMixin:
+    class XMediaMixinProtocol:
+        logger: logging.Logger
+        http_client: Any
+        bearer_token_manager: Any
+        auth_strategy: str
+        auth: Any
+        config: Any
+        BASE_URL: str
+        _request: Callable[..., Awaitable[Any]]
+        _paginate: Callable[..., Awaitable[PaginatedResult]]
+        _validate_path_param: Callable[[str, Any], str]
+        _get_oauth2_user_token: Callable[[], Awaitable[Any]]
+        _invalidate_oauth2_user_token: Callable[[], None]
+else:
+    class XMediaMixinProtocol:
+        pass
+
+
+
+class XMediaMixin(XMediaMixinProtocol):
     """Mixin for uploading media to X using the v2 chunked upload API."""
 
     MEDIA_UPLOAD_URL = "https://api.x.com/2/media/upload"
@@ -76,31 +100,36 @@ class XMediaMixin:
         attempts = 0
 
         try:
-            async with asyncio.timeout(300):  # 5 minute hard cap
-                while state in ["pending", "in_progress"]:
-                    attempts += 1
-                    if attempts > self.MAX_POLL_ATTEMPTS:
-                        raise MediaError(f"Media {media_id} polling exceeded max attempts", platform="x")
+            start_poll = asyncio.get_event_loop().time()
+            while state in ["pending", "in_progress"]:
+                if asyncio.get_event_loop().time() - start_poll > 300:
+                    raise MediaError(f"Media {media_id} processing timed out after 5 minutes", platform="x")
 
-                    check_after_secs = processing_info.check_after_secs or 1
-                    await asyncio.sleep(check_after_secs)
+                attempts += 1
+                if attempts > self.MAX_POLL_ATTEMPTS:
+                    raise MediaError(f"Media {media_id} polling exceeded max attempts", platform="x")
 
-                    status_res = await self.get_upload_status(media_id=media_id)
+                check_after_secs = processing_info.check_after_secs or 1
+                await asyncio.sleep(check_after_secs)
 
-                    if status_res.data and status_res.data.processing_info:
-                        state = status_res.data.processing_info.state
-                        processing_info = status_res.data.processing_info
+                status_res = await self.get_upload_status(media_id=media_id)
 
-                    if state == "failed":
-                        error_msg = "Unknown error"
-                        if status_res.errors and len(status_res.errors) > 0:
-                            error_msg = str(status_res.errors[0])
-                        raise MediaError(f"Media processing failed: {error_msg}", platform="x")
+                if status_res.data and status_res.data.processing_info:
+                    state = status_res.data.processing_info.state
+                    processing_info = status_res.data.processing_info
 
-                if state != "succeeded":
-                    self.logger.warning(f"Media {media_id} completed with unknown state: {state}")
-        except asyncio.TimeoutError as e:
-            raise MediaError(f"Media {media_id} processing timed out after 5 minutes", platform="x") from e
+                if state == "failed":
+                    error_msg = "Unknown error"
+                    if status_res.errors and len(status_res.errors) > 0:
+                        error_msg = str(status_res.errors[0])
+                    raise MediaError(f"Media processing failed: {error_msg}", platform="x")
+
+                if state == "succeeded":
+                    break
+        except Exception as e:
+            if isinstance(e, MediaError):
+                raise
+            raise MediaError(f"Unexpected error polling media status: {e}", platform="x") from e
 
     async def get_media_by_keys(
         self,

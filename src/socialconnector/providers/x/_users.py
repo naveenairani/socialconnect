@@ -2,10 +2,27 @@
 X Users Mixin for managing user info, follows, likes, and bookmarks.
 """
 
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Awaitable, cast
+
 from socialconnector.core.models import PaginatedResult, UserInfo
 
+if TYPE_CHECKING:
+    import logging
 
-class XUsersMixin:
+    class XUsersProtocol:
+        logger: logging.Logger
+        _request: Callable[..., Awaitable[Any]]
+        _paginate: Callable[..., Awaitable[PaginatedResult]]
+        _validate_path_param: Callable[[str, Any], str]
+        _get_oauth2_user_token: Callable[[], Awaitable[Any]]
+        _invalidate_oauth2_user_token: Callable[[], None]
+else:
+    class XUsersProtocol:
+        pass
+
+
+class XUsersMixin(XUsersProtocol):
     """Mixin for user-related operations (lookups, follow, like, bookmark, lists)."""
 
     async def get_user_info(self, user_id: str) -> UserInfo:
@@ -37,7 +54,7 @@ class XUsersMixin:
         path = f"users/{self._validate_path_param('user_id', user_id)}/following"
         try:
             res = await self._request("POST", path, json={"target_user_id": target_user_id}, auth_type="oauth1")
-            return res.get("data", {}).get("following", False)
+            return bool(res.get("data", {}).get("following", False))
         except Exception as e:
             self.logger.error(f"Failed to follow user {target_user_id}: {e}")
             return False
@@ -69,7 +86,7 @@ class XUsersMixin:
         path = f"users/{self._validate_path_param('user_id', user_id)}/likes"
         try:
             res = await self._request("POST", path, json={"tweet_id": tweet_id}, auth_type="oauth1")
-            return res.get("data", {}).get("liked", False)
+            return bool(res.get("data", {}).get("liked", False))
         except Exception as e:
             self.logger.error(f"Failed to like tweet {tweet_id}: {e}")
             return False
@@ -96,7 +113,7 @@ class XUsersMixin:
         path = f"users/{self._validate_path_param('user_id', user_id)}/retweets"
         try:
             res = await self._request("POST", path, json={"tweet_id": tweet_id}, auth_type="oauth1")
-            return res.get("data", {}).get("retweeted", False)
+            return cast(bool, res.get("data", {}).get("retweeted", False))
         except Exception as e:
             self.logger.error(f"Failed to retweet tweet {tweet_id}: {e}")
             return False
@@ -118,7 +135,7 @@ class XUsersMixin:
         path = f"users/{self._validate_path_param('user_id', user_id)}/bookmarks"
         try:
             res = await self._request("POST", path, json={"tweet_id": tweet_id}, auth_type="oauth1")
-            return res.get("data", {}).get("bookmarked", False)
+            return bool(res.get("data", {}).get("bookmarked", False))
         except Exception as e:
             self.logger.error(f"Failed to bookmark tweet {tweet_id}: {e}")
             return False
@@ -146,7 +163,7 @@ class XUsersMixin:
         path = f"lists/{self._validate_path_param('list_id', list_id)}/members"
         try:
             res = await self._request("POST", path, json={"user_id": user_id}, auth_type="oauth1")
-            return res.get("data", {}).get("is_member", False)
+            return bool(res.get("data", {}).get("is_member", False))
         except Exception as e:
             self.logger.error(f"Failed to add user {user_id} to list {list_id}: {e}")
             return False
@@ -184,7 +201,7 @@ class XUsersMixin:
         list_fields: list[str] | None = None,
         expansions: list[str] | None = None,
         user_fields: list[str] | None = None,
-    ) -> dict:
+    ) -> dict[Any, Any]:
         """Get a List by its ID."""
         path = f"lists/{self._validate_path_param('list_id', list_id)}"
         fields = [
@@ -193,7 +210,7 @@ class XUsersMixin:
             ("user.fields", user_fields),
         ]
         p = {k: ",".join(v) for k, v in fields if v}
-        return await self._request("GET", path, params=p or None)
+        return cast(dict[Any, Any], await self._request("GET", path, params=p or None))
 
     async def update_list(
         self,
@@ -210,17 +227,17 @@ class XUsersMixin:
             return True
         try:
             res = await self._request("PUT", path, json=data, auth_type="oauth1")
-            return res.get("data", {}).get("updated", False)
+            return bool(res.get("data", {}).get("updated", False))
         except Exception as e:
             self.logger.error(f"Failed to update list {list_id}: {e}")
             return False
 
-    async def create_list(self, name: str, *, description: str | None = None, private: bool | None = None) -> dict:
+    async def create_list(self, name: str, *, description: str | None = None, private: bool | None = None) -> dict[Any, Any]:
         """Create a new list."""
         data = {k: v for k, v in [("name", name), ("description", description), ("private", private)] if v is not None}
         try:
             res = await self._request("POST", "lists", json=data, auth_type="oauth1")
-            return res.get("data", {})
+            return dict(res.get("data", {}))
         except Exception as e:
             self.logger.error(f"Failed to create list '{name}': {e}")
             raise
@@ -230,7 +247,7 @@ class XUsersMixin:
         path = f"lists/{self._validate_path_param('list_id', list_id)}"
         try:
             res = await self._request("DELETE", path, auth_type="oauth1")
-            return res.get("data", {}).get("deleted", False)
+            return bool(res.get("data", {}).get("deleted", False))
         except Exception as e:
             self.logger.error(f"Failed to delete list {list_id}: {e}")
             return False

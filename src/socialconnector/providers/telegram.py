@@ -113,7 +113,7 @@ class TelegramAdapter(BaseAdapter):
         url = f"{self.api_url}/deleteMessage"
         data = {"chat_id": chat_id, "message_id": message_id}
         response = await self.http_client.request("POST", url, json=data)
-        return response.status_code == 200
+        return bool(response.status_code == 200)
 
     async def get_messages(self, chat_id: str, *, limit: int = 50) -> list[Message]:
         return []
@@ -125,7 +125,7 @@ class TelegramAdapter(BaseAdapter):
         url = f"{self.api_url}/setWebhook"
         data = {"url": config.url}
         response = await self.http_client.request("POST", url, json=data)
-        return response.status_code == 200
+        return bool(response.status_code == 200)
 
     async def start_polling(self) -> None:
         pass

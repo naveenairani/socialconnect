@@ -5,7 +5,7 @@ try:
     from importlib.metadata import entry_points
 except ImportError:
     # For Python < 3.10
-    from importlib_metadata import entry_points
+    from importlib_metadata import entry_points  # type: ignore[no-redef] 
 
 from socialconnector.core.exceptions import ProviderNotFoundError
 

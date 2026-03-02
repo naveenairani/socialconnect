@@ -170,7 +170,7 @@ class OAuth2PKCEFlow:
             "code_verifier": verifier,
         }
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
-        auth: tuple[str, str] | None = None
+        auth: Any = None
 
         if self.client_secret:
             auth = (self.client_id, self.client_secret)
@@ -198,7 +198,7 @@ class OAuth2PKCEFlow:
             "refresh_token": self.token.refresh_token,
         }
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
-        auth: tuple[str, str] | None = None
+        auth: Any = None
 
         if self.client_secret:
             auth = (self.client_id, self.client_secret)

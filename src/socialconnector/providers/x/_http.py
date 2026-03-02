@@ -6,14 +6,39 @@ import asyncio
 import re
 import time
 import urllib.parse
-from typing import Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Awaitable
 from urllib.parse import urlparse
 
 from socialconnector.core.exceptions import RateLimitError, SocialConnectorError
 from socialconnector.core.models import PaginatedResult
 
+if TYPE_CHECKING:
+    import logging
 
-class XHttpMixin:
+    class XHttpMixinProtocol:
+        logger: logging.Logger
+        http_client: Any
+        bearer_token_manager: Any
+        auth_strategy: str
+        auth: Any
+        config: Any
+        BASE_URL: str
+        _request: Callable[..., Awaitable[Any]]
+        _paginate: Callable[..., Awaitable[PaginatedResult]]
+        _validate_path_param: Callable[[str, Any], str]
+        _get_oauth2_user_token: Callable[[], Awaitable[Any]]
+        _invalidate_oauth2_user_token: Callable[[], None]
+        _last_request_time: float
+        _rate_limit_remaining: int | None
+        _rate_limit_reset: float
+else:
+    class XHttpMixinProtocol:
+        pass
+
+
+
+class XHttpMixin(XHttpMixinProtocol):
     """Mixin providing unified request and pagination logic for X API."""
 
     BASE_URL = "https://api.x.com/2"
@@ -110,7 +135,7 @@ class XHttpMixin:
 
         # ── 4. Execute with 429 retry loop ──
         current_strategy = self._normalize_auth_type(auth_type)
-        response = None
+        response: Any = None
 
         for attempt in range(1, self.MAX_RETRIES_ON_429 + 1):
             if current_strategy == "oauth1":
@@ -157,6 +182,9 @@ class XHttpMixin:
                 except (TypeError, ValueError):
                     self.logger.warning("Ignoring invalid x-rate-limit-reset header: %r", res)
 
+            if response is None:
+                break
+            
             # ── 6. Handle 429 with automatic retry + backoff ──
             if response.status_code == 429:
                 if attempt < self.MAX_RETRIES_ON_429:
@@ -181,12 +209,15 @@ class XHttpMixin:
             break  # Non-429 response, exit retry loop
 
         # ── 7. Handle 401 for OAuth2 by invalidating token ──
-        if response.status_code == 401:
+        if response is not None and response.status_code == 401:
             if current_strategy == "oauth2_app":
                 self.bearer_token_manager.invalidate()
             elif current_strategy == "oauth2_user_context":
                 self._invalidate_oauth2_user_token()
 
+        if response is None:
+            raise SocialConnectorError("No response received from X API", platform="x")
+        
         try:
             response.raise_for_status()
         except Exception as e:
@@ -207,7 +238,7 @@ class XHttpMixin:
         auth_type: str | None = None,
     ) -> PaginatedResult:
         """Handle X v2 pagination with next_token."""
-        all_data = []
+        all_data: list[Any] = []
         p = dict(params) if params else {}
         # X v2 max results per page is typically 100 for most endpoints
         p["max_results"] = min(limit, 100)

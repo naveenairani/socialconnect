@@ -3,7 +3,7 @@ X Chat API Mixin for encrypted direct messages and public keys.
 """
 
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from socialconnector.core.models import (
     AddUserPublicKeyRequest,
@@ -15,8 +15,29 @@ from socialconnector.core.models import (
     SendMessageResponse,
 )
 
+if TYPE_CHECKING:
+    import logging
 
-class XChatMixin:
+    class XChatMixinProtocol:
+        logger: logging.Logger
+        http_client: Any
+        bearer_token_manager: Any
+        auth_strategy: str
+        auth: Any
+        config: Any
+        BASE_URL: str
+        _request: Any
+        _paginate: Any
+        _emit: Any
+        _validate_path_param: Any
+        _get_oauth2_user_token: Any
+        _invalidate_oauth2_user_token: Any
+else:
+    class XChatMixinProtocol:
+        pass
+
+
+class XChatMixin(XChatMixinProtocol):
     """Mixin for X Chat API operations (encrypted DMs, public keys)."""
 
     async def send_message(

@@ -42,9 +42,12 @@ import asyncio
 from socialconnector import SocialConnector
 
 async def main():
-    # X (Twitter) — OAuth1 credentials
-    connector = SocialConnector(
-        "x",
+    # 1. Create a strongly-typed adapter instance
+    # (IDE auto-complete will now know this is an XAdapter)
+    connector = SocialConnector("x")
+
+    # 2. Setup your credentials
+    connector.setup(
         api_key="YOUR_API_KEY",
         api_secret="YOUR_API_SECRET",
         access_token="YOUR_ACCESS_TOKEN",
@@ -61,7 +64,7 @@ async def main():
 asyncio.run(main())
 ```
 
-Using `.env` for credentials:
+Using `.env` for credentials? The `setup()` method automatically loads them:
 
 ```bash
 # .env
@@ -74,7 +77,9 @@ X_ACCESS_TOKEN_SECRET=your_token_secret
 ```python
 from dotenv import load_dotenv
 load_dotenv()
-connector = SocialConnector("x")  # reads from environment automatically
+
+# Instantiating automatically calls setup(), which falls back to ENV vars
+connector = SocialConnector("x") 
 ```
 
 ---
@@ -95,7 +100,7 @@ connector = SocialConnector("x")  # reads from environment automatically
 
 SocialConnector uses the **Adapter Pattern** — every platform implements the same `BaseAdapter` interface so your application code never needs to know which platform it is talking to.
 
-```
+```text
 SocialConnector (factory)
     └── BaseAdapter (abstract)
             ├── XAdapter          (X / Twitter)

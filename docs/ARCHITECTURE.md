@@ -2,12 +2,12 @@
 
 ## Core Patterns
 
-### Adapter + Registry + Factory (Creation)
+### Factory Function Facade + Adapter + Registry
 
-Standardizes provider interactions and object lifecycle.
+Standardizes provider interactions and object lifecycle while providing perfect IDE IntelliSense.
 
-```
-User Code → SocialConnector (Facade) → AdapterFactory → AdapterRegistry → BaseAdapter → ConcreteAdapter
+```text
+User Code → SocialConnector (Factory Function) → AdapterFactory → AdapterRegistry → BaseAdapter → ConcreteAdapter (e.g., XAdapter)
 ```
 
 - **BaseAdapter**: Abstract base for all providers.

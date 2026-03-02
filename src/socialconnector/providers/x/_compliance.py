@@ -4,6 +4,8 @@ X Compliance Mixin for batch compliance jobs.
 
 import tempfile
 from pathlib import Path
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Awaitable
 from urllib.parse import urlparse
 
 from socialconnector.core.exceptions import SocialConnectorError
@@ -12,10 +14,31 @@ from socialconnector.core.models import (
     CreateJobsResponse,
     GetJobsByIdResponse,
     GetJobsResponse,
+    PaginatedResult,
 )
 
+if TYPE_CHECKING:
+    import logging
 
-class XComplianceMixin:
+    class XComplianceMixinProtocol:
+        logger: logging.Logger
+        http_client: Any
+        bearer_token_manager: Any
+        auth_strategy: str
+        auth: Any
+        config: Any
+        BASE_URL: str
+        _request: Callable[..., Awaitable[Any]]
+        _paginate: Callable[..., Awaitable[PaginatedResult]]
+        _validate_path_param: Callable[[str, Any], str]
+        _get_oauth2_user_token: Callable[[], Awaitable[Any]]
+        _invalidate_oauth2_user_token: Callable[[], None]
+else:
+    class XComplianceMixinProtocol:
+        pass
+
+
+class XComplianceMixin(XComplianceMixinProtocol):
     """Mixin for X Batch Compliance API v2."""
 
     def _validate_compliance_url(self, url: str) -> str:
@@ -114,7 +137,7 @@ class XComplianceMixin:
             # Direct GET to download_url (external to X API v2 base URL)
             response = await self.http_client.request("GET", safe_url)
             response.raise_for_status()
-            return response.text
+            return str(response.text)
         except Exception as e:
             self.logger.error(f"Failed to download compliance results: {e}")
             raise SocialConnectorError(f"Download failed: {e}", platform="x") from e

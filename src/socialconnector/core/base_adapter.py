@@ -25,7 +25,7 @@ class BaseAdapter(ABC):
         self.config = config
         self.http_client = http_client
         self.logger = logger
-        self._handlers: dict[str, list[Callable]] = {}
+        self._handlers: dict[str, list[Callable[..., Any]]] = {}
 
     @abstractmethod
     async def connect(self) -> None:
@@ -110,13 +110,13 @@ class BaseAdapter(ABC):
     async def stop_polling(self) -> None:
         """Stop event polling."""
 
-    def on(self, event_type: str, callback: Callable) -> None:
+    def on(self, event_type: str, callback: Callable[..., Any]) -> None:
         """Register an event handler."""
         if event_type not in self._handlers:
             self._handlers[event_type] = []
         self._handlers[event_type].append(callback)
 
-    def on_message(self, callback: Callable) -> Callable:
+    def on_message(self, callback: Callable[..., Any]) -> Callable[..., Any]:
         """Decorator shortcut for message events."""
         self.on("message_received", callback)
         return callback

@@ -101,7 +101,7 @@ class OAuth1Auth(AuthProvider):
     @property
     def auth(self) -> Any:
         """Return the Authlib httpx-compatible auth object."""
-        from authlib.integrations.httpx_client import OAuth1Auth as AuthlibOAuth1Auth
+        from authlib.integrations.httpx_client import OAuth1Auth as AuthlibOAuth1Auth  # type: ignore
 
         return AuthlibOAuth1Auth(
             client_id=self.client_key,

@@ -2,9 +2,9 @@
 X Direct Messages Mixin for managing conversations and messages.
 """
 
-from collections.abc import AsyncGenerator
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any, Awaitable
+from collections.abc import AsyncGenerator, Callable
 
 from socialconnector.core.models import (
     CreateByConversationIdRequest,
@@ -20,11 +20,32 @@ from socialconnector.core.models import (
     GetEventsResponse,
     Message,
     MessageResponse,
+    PaginatedResult,
     UserInfo,
 )
 
+if TYPE_CHECKING:
+    import logging
 
-class XDmsMixin:
+    class XDmsMixinProtocol:
+        logger: logging.Logger
+        http_client: Any
+        bearer_token_manager: Any
+        auth_strategy: str
+        auth: Any
+        config: Any
+        BASE_URL: str
+        _request: Callable[..., Awaitable[Any]]
+        _paginate: Callable[..., Awaitable[PaginatedResult]]
+        _validate_path_param: Callable[[str, Any], str]
+        _get_oauth2_user_token: Callable[[], Awaitable[Any]]
+        _invalidate_oauth2_user_token: Callable[[], None]
+else:
+    class XDmsMixinProtocol:
+        pass
+
+
+class XDmsMixin(XDmsMixinProtocol):
     """Mixin for direct message operations (with user, in conversation, lookup)."""
 
     async def direct_message(
@@ -119,8 +140,8 @@ class XDmsMixin:
                 Message(
                     id=e["id"],
                     platform="x",
-                    chat_id=e.get("dm_conversation_id"),
-                    sender=UserInfo(id=e.get("sender_id"), platform="x"),
+                    chat_id=e.get("dm_conversation_id", ""),
+                    sender=UserInfo(id=e.get("sender_id", ""), platform="x"),
                     text=e.get("text"),
                     timestamp=datetime.fromisoformat(e["created_at"].replace("Z", "+00:00")),
                     raw=e,

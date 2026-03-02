@@ -35,7 +35,7 @@ class AdapterConfig(BaseModel):
     """Configuration for initializing a provider adapter."""
 
     provider: str
-    api_key: str
+    api_key: str | None = None
     api_secret: str | None = None
     base_url: str | None = None
     timeout: float = 30.0
@@ -43,7 +43,7 @@ class AdapterConfig(BaseModel):
     rate_limit: float | None = None
     extra: dict[str, Any] = Field(default_factory=dict)
 
-    @field_validator("provider", "api_key")
+    @field_validator("provider")
     @classmethod
     def name_must_be_non_empty(cls, v: str) -> str:
         if not v or not v.strip():
@@ -389,7 +389,7 @@ class ComplianceJobData(BaseModel):
 
 
 class GetJobsByIdResponse(BaseModel):
-    data: ComplianceJobData = Field(default_factory=dict)
+    data: ComplianceJobData | None = None
     errors: list[Any] | None = None
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
@@ -418,7 +418,7 @@ class CreateJobsRequest(BaseModel):
 
 
 class CreateJobsResponse(BaseModel):
-    data: ComplianceJobData = Field(default_factory=dict)
+    data: ComplianceJobData | None = None
     errors: list[Any] | None = None
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
@@ -587,7 +587,7 @@ class GetEventsByIdResponseIncludes(BaseModel):
 
 
 class GetEventsByIdResponse(BaseModel):
-    data: GetEventsByIdResponseData | None = Field(default_factory=dict)
+    data: GetEventsByIdResponseData | None = None
     errors: list[Any] | None = None
     includes: Any | None = None
 
@@ -623,7 +623,7 @@ class CreateConversationResponseData(BaseModel):
 
 
 class CreateConversationResponse(BaseModel):
-    data: CreateConversationResponseData | None = Field(default_factory=dict)
+    data: CreateConversationResponseData | None = None
     errors: list[Any] | None = None
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
@@ -644,7 +644,7 @@ class CreateByConversationIdResponseData(BaseModel):
 
 
 class CreateByConversationIdResponse(BaseModel):
-    data: CreateByConversationIdResponseData | None = Field(default_factory=dict)
+    data: CreateByConversationIdResponseData | None = None
     errors: list[Any] | None = None
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
@@ -665,7 +665,7 @@ class CreateByParticipantIdResponseData(BaseModel):
 
 
 class CreateByParticipantIdResponse(BaseModel):
-    data: CreateByParticipantIdResponseData | None = Field(default_factory=dict)
+    data: CreateByParticipantIdResponseData | None = None
     errors: list[Any] | None = None
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
@@ -943,7 +943,7 @@ class CreateSubtitlesResponseData(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 class CreateSubtitlesResponse(BaseModel):
-    data: CreateSubtitlesResponseData | None = Field(default_factory=dict)
+    data: CreateSubtitlesResponseData | None = None
     errors: list[Any] | None = None
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
@@ -958,7 +958,7 @@ class DeleteSubtitlesResponseData(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 class DeleteSubtitlesResponse(BaseModel):
-    data: DeleteSubtitlesResponseData | None = Field(default_factory=dict)
+    data: DeleteSubtitlesResponseData | None = None
     errors: list[Any] | None = None
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
@@ -1436,4 +1436,141 @@ class TweetInsightsHistoricalResponse(BaseModel):
     """Response model for get_insights_historical"""
     data: list[Any] | None = None
     errors: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+# --- X Spaces API Models ---
+
+class SpaceGetByCreatorIdsResponseMeta(BaseModel):
+    result_count: int | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+class SpaceGetByCreatorIdsResponseIncludes(BaseModel):
+    media: list[Any] | None = None
+    places: list[Any] | None = None
+    polls: list[Any] | None = None
+    topics: list[Any] | None = None
+    tweets: list[Any] | None = None
+    users: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+class SpaceGetByCreatorIdsResponse(BaseModel):
+    data: list[Any] | None = None
+    errors: list[Any] | None = None
+    includes: SpaceGetByCreatorIdsResponseIncludes | None = None
+    meta: SpaceGetByCreatorIdsResponseMeta | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+class SpaceGetBuyersResponseMeta(BaseModel):
+    next_token: str | None = None
+    previous_token: str | None = None
+    result_count: int | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+class SpaceGetBuyersResponseIncludes(BaseModel):
+    media: list[Any] | None = None
+    places: list[Any] | None = None
+    polls: list[Any] | None = None
+    topics: list[Any] | None = None
+    tweets: list[Any] | None = None
+    users: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+class SpaceGetBuyersResponse(BaseModel):
+    data: list[Any] | None = None
+    errors: list[Any] | None = None
+    includes: SpaceGetBuyersResponseIncludes | None = None
+    meta: SpaceGetBuyersResponseMeta | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+class SpaceSearchResponseMeta(BaseModel):
+    result_count: int | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+class SpaceSearchResponseIncludes(BaseModel):
+    media: list[Any] | None = None
+    places: list[Any] | None = None
+    polls: list[Any] | None = None
+    topics: list[Any] | None = None
+    tweets: list[Any] | None = None
+    users: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+class SpaceSearchResponse(BaseModel):
+    data: list[Any] | None = None
+    errors: list[Any] | None = None
+    includes: SpaceSearchResponseIncludes | None = None
+    meta: SpaceSearchResponseMeta | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+class SpaceGetByIdResponseData(BaseModel):
+    created_at: str | None = None
+    creator_id: str | None = None
+    ended_at: str | None = None
+    host_ids: list[Any] | None = None
+    id: str | None = None
+    invited_user_ids: list[Any] | None = None
+    is_ticketed: bool | None = None
+    lang: str | None = None
+    participant_count: int | None = None
+    scheduled_start: str | None = None
+    speaker_ids: list[Any] | None = None
+    started_at: str | None = None
+    state: str | None = None
+    subscriber_count: int | None = None
+    title: str | None = None
+    topics: list[Any] | None = None
+    updated_at: str | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+class SpaceGetByIdResponseIncludes(BaseModel):
+    media: list[Any] | None = None
+    places: list[Any] | None = None
+    polls: list[Any] | None = None
+    topics: list[Any] | None = None
+    tweets: list[Any] | None = None
+    users: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+class SpaceGetByIdResponse(BaseModel):
+    data: SpaceGetByIdResponseData | None = None
+    errors: list[Any] | None = None
+    includes: SpaceGetByIdResponseIncludes | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+class SpaceGetByIdsResponseIncludes(BaseModel):
+    media: list[Any] | None = None
+    places: list[Any] | None = None
+    polls: list[Any] | None = None
+    topics: list[Any] | None = None
+    tweets: list[Any] | None = None
+    users: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+class SpaceGetByIdsResponse(BaseModel):
+    data: list[Any] | None = None
+    errors: list[Any] | None = None
+    includes: SpaceGetByIdsResponseIncludes | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+class SpaceGetPostsResponseMeta(BaseModel):
+    next_token: str | None = None
+    previous_token: str | None = None
+    result_count: int | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+class SpaceGetPostsResponseIncludes(BaseModel):
+    media: list[Any] | None = None
+    places: list[Any] | None = None
+    polls: list[Any] | None = None
+    topics: list[Any] | None = None
+    tweets: list[Any] | None = None
+    users: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+class SpaceGetPostsResponse(BaseModel):
+    data: list[Any] | None = None
+    errors: list[Any] | None = None
+    includes: SpaceGetPostsResponseIncludes | None = None
+    meta: SpaceGetPostsResponseMeta | None = None
     model_config = ConfigDict(populate_by_name=True, extra="allow")

@@ -3,6 +3,7 @@ X Connections Mixin for managing streaming connections.
 """
 
 from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING, Any
 
 from socialconnector.core.models import (
     DeleteAllResponse,
@@ -12,8 +13,30 @@ from socialconnector.core.models import (
     GetConnectionHistoryResponse,
 )
 
+if TYPE_CHECKING:
+    import logging
 
-class XConnectionsMixin:
+    class XConnectionsMixinProtocol:
+        logger: logging.Logger
+        http_client: Any
+        bearer_token_manager: Any
+        auth_strategy: str
+        auth: Any
+        config: Any
+        BASE_URL: str
+        _request: Any
+        _paginate: Any
+        _emit: Any
+        _validate_path_param: Any
+        _get_oauth2_user_token: Any
+        _invalidate_oauth2_user_token: Any
+else:
+    class XConnectionsMixinProtocol:
+        pass
+
+
+
+class XConnectionsMixin(XConnectionsMixinProtocol):
     """Mixin for X Connections API v2."""
 
     async def get_connection_history(
@@ -33,7 +56,7 @@ class XConnectionsMixin:
         current_pagination_token = pagination_token
 
         while True:
-            params = {}
+            params: dict[str, Any] = {}
             if status is not None:
                 params["status"] = status
             if endpoints is not None:
