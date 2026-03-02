@@ -1059,3 +1059,381 @@ class UsageGetResponse(BaseModel):
     data: UsageGetResponseData | None = None
     errors: list[Any] | None = None
     model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+# --- X Tweet Counts API Models ---
+
+class TweetCountsRecentResponseMeta(BaseModel):
+    newest_id: str | None = None
+    next_token: str | None = None
+    oldest_id: str | None = None
+    total_tweet_count: int | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetCountsRecentResponse(BaseModel):
+    data: list[Any] | None = None
+    errors: list[Any] | None = None
+    meta: TweetCountsRecentResponseMeta | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+# --- X Tweet Lookup API Models ---
+
+class GetByIdsResponseIncludes(BaseModel):
+    """Nested model for GetByIdsResponseIncludes"""
+
+    media: list[Any] | None = None
+    places: list[Any] | None = None
+    polls: list[Any] | None = None
+    topics: list[Any] | None = None
+    tweets: list[Any] | None = None
+    users: list[Any] | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class GetByIdsResponse(BaseModel):
+    """Response model for get_tweets_by_ids"""
+
+    data: list[Any] | None = None
+    errors: list[Any] | None = None
+    includes: GetByIdsResponseIncludes | None = None
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+# --- X Single Tweet Lookup API Models ---
+
+class TweetGetByIdResponseDataAttachments(BaseModel):
+    media_keys: list[str] | None = None
+    media_source_tweet_id: list[str] | None = None
+    poll_ids: list[str] | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetGetByIdResponseDataEditControls(BaseModel):
+    editable_until: datetime | str | None = None
+    edits_remaining: int | None = None
+    is_edit_eligible: bool | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetGetByIdResponseDataEntities(BaseModel):
+    annotations: list[Any] | None = None
+    cashtags: list[Any] | None = None
+    hashtags: list[Any] | None = None
+    mentions: list[Any] | None = None
+    urls: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetGetByIdResponseDataGeoCoordinates(BaseModel):
+    coordinates: list[float] | None = None
+    type: str | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetGetByIdResponseDataGeo(BaseModel):
+    coordinates: TweetGetByIdResponseDataGeoCoordinates | None = None
+    place_id: str | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetGetByIdResponseDataNoteTweetEntities(BaseModel):
+    cashtags: list[Any] | None = None
+    hashtags: list[Any] | None = None
+    mentions: list[Any] | None = None
+    urls: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetGetByIdResponseDataNoteTweet(BaseModel):
+    entities: TweetGetByIdResponseDataNoteTweetEntities | None = None
+    text: str | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetGetByIdResponseDataPublicMetrics(BaseModel):
+    bookmark_count: int | None = None
+    impression_count: int | None = None
+    like_count: int | None = None
+    quote_count: int | None = None
+    reply_count: int | None = None
+    retweet_count: int | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetGetByIdResponseData(BaseModel):
+    attachments: TweetGetByIdResponseDataAttachments | None = None
+    author_id: str | None = None
+    community_id: str | None = None
+    context_annotations: list[Any] | None = None
+    conversation_id: str | None = None
+    created_at: datetime | str | None = None
+    display_text_range: list[int] | None = None
+    edit_controls: TweetGetByIdResponseDataEditControls | None = None
+    edit_history_tweet_ids: list[str] | None = None
+    entities: TweetGetByIdResponseDataEntities | None = None
+    geo: TweetGetByIdResponseDataGeo | None = None
+    id: str | None = None
+    in_reply_to_user_id: str | None = None
+    lang: str | None = None
+    non_public_metrics: dict[str, Any] | None = None
+    note_tweet: TweetGetByIdResponseDataNoteTweet | None = None
+    organic_metrics: dict[str, Any] | None = None
+    possibly_sensitive: bool | None = None
+    promoted_metrics: dict[str, Any] | None = None
+    public_metrics: TweetGetByIdResponseDataPublicMetrics | None = None
+    referenced_tweets: list[dict[str, Any]] | None = None
+    reply_settings: str | None = None
+    scopes: dict[str, Any] | None = None
+    source: str | None = None
+    text: str | None = None
+    username: str | None = None
+    withheld: dict[str, Any] | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetGetByIdResponse(BaseModel):
+    data: TweetGetByIdResponseData | None = None
+    errors: list[Any] | None = None
+    includes: GetByIdsResponseIncludes | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+# --- X Tweet Creation API Models ---
+
+class TweetCreateRequestEditOptions(BaseModel):
+    previous_post_id: str | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetCreateRequestGeo(BaseModel):
+    place_id: str | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetCreateRequestMedia(BaseModel):
+    media_ids: list[str] | None = None
+    tagged_user_ids: list[str] | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetCreateRequestPoll(BaseModel):
+    duration_minutes: int | None = None
+    options: list[str] | None = None
+    reply_settings: str | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetCreateRequestReply(BaseModel):
+    auto_populate_reply_metadata: bool | None = None
+    exclude_reply_user_ids: list[str] | None = None
+    in_reply_to_tweet_id: str | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetCreateRequest(BaseModel):
+    card_uri: str | None = None
+    community_id: str | None = None
+    direct_message_deep_link: str | None = None
+    edit_options: TweetCreateRequestEditOptions | None = None
+    for_super_followers_only: bool | None = None
+    geo: TweetCreateRequestGeo | None = None
+    media: TweetCreateRequestMedia | None = None
+    nullcast: bool | None = None
+    poll: TweetCreateRequestPoll | None = None
+    quote_tweet_id: str | None = None
+    reply: TweetCreateRequestReply | None = None
+    reply_settings: str | None = None
+    share_with_followers: bool | None = None
+    text: str | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetCreateResponseData(BaseModel):
+    id: str | None = None
+    text: str | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetCreateResponse(BaseModel):
+    data: TweetCreateResponseData | None = Field(default_factory=TweetCreateResponseData)
+    errors: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+# --- X Tweet Delete API Models ---
+
+class TweetDeleteResponseData(BaseModel):
+    deleted: bool | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetDeleteResponse(BaseModel):
+    data: TweetDeleteResponseData | None = Field(default_factory=TweetDeleteResponseData)
+    errors: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+# --- X Tweet Search All (Full-archive) API Models ---
+
+class TweetSearchAllResponseMeta(BaseModel):
+    newest_id: str | None = None
+    next_token: str | None = None
+    oldest_id: str | None = None
+    result_count: int | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetSearchAllResponse(BaseModel):
+    data: list[Any] | None = None
+    errors: list[Any] | None = None
+    includes: GetByIdsResponseIncludes | None = None
+    meta: TweetSearchAllResponseMeta | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+# --- X Tweet Search Recent API Models ---
+
+class TweetSearchRecentResponseMeta(BaseModel):
+    newest_id: str | None = None
+    next_token: str | None = None
+    oldest_id: str | None = None
+    result_count: int | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetSearchRecentResponse(BaseModel):
+    data: list[Any] | None = None
+    errors: list[Any] | None = None
+    includes: GetByIdsResponseIncludes | None = None
+    meta: TweetSearchRecentResponseMeta | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+# --- X Tweet Retweeted By API Models ---
+
+class TweetRetweetedByResponseMeta(BaseModel):
+    next_token: str | None = None
+    previous_token: str | None = None
+    result_count: int | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetRetweetedByResponse(BaseModel):
+    data: list[Any] | None = None
+    errors: list[Any] | None = None
+    includes: GetByIdsResponseIncludes | None = None
+    meta: TweetRetweetedByResponseMeta | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+# --- X Tweet Quoted Tweets API Models ---
+
+class TweetQuotedResponseMeta(BaseModel):
+    next_token: str | None = None
+    result_count: int | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetQuotedResponse(BaseModel):
+    data: list[Any] | None = None
+    errors: list[Any] | None = None
+    includes: GetByIdsResponseIncludes | None = None
+    meta: TweetQuotedResponseMeta | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+# --- X Tweet Counts All (Full-archive) API Models ---
+
+class TweetCountsAllResponseMeta(BaseModel):
+    newest_id: str | None = None
+    next_token: str | None = None
+    oldest_id: str | None = None
+    total_tweet_count: int | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetCountsAllResponse(BaseModel):
+    data: list[Any] | None = None
+    errors: list[Any] | None = None
+    meta: TweetCountsAllResponseMeta | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+# --- X Tweet Liking Users API Models ---
+
+class TweetLikingUsersResponseMeta(BaseModel):
+    next_token: str | None = None
+    previous_token: str | None = None
+    result_count: int | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetLikingUsersResponse(BaseModel):
+    data: list[Any] | None = None
+    errors: list[Any] | None = None
+    includes: GetByIdsResponseIncludes | None = None
+    meta: TweetLikingUsersResponseMeta | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+# --- X Tweet Reposts (Retweets) API Models ---
+
+class TweetRepostsResponseMeta(BaseModel):
+    next_token: str | None = None
+    previous_token: str | None = None
+    result_count: int | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TweetRepostsResponse(BaseModel):
+    data: list[Any] | None = None
+    errors: list[Any] | None = None
+    includes: GetByIdsResponseIncludes | None = None
+    meta: TweetRepostsResponseMeta | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+# --- X Hide Reply API Models ---
+
+class HideReplyRequest(BaseModel):
+    hidden: bool = Field(...)
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class HideReplyResponseData(BaseModel):
+    hidden: bool | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class HideReplyResponse(BaseModel):
+    data: HideReplyResponseData | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+# --- X Tweet Analytics API Models ---
+
+class TweetAnalyticsResponse(BaseModel):
+    data: list[Any] | None = None
+    errors: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+# --- X Tweet Insights API Models ---
+
+class TweetInsights28hrResponse(BaseModel):
+    """Response model for get_insights28hr"""
+    data: list[Any] | None = None
+    errors: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+class TweetInsightsHistoricalResponse(BaseModel):
+    """Response model for get_insights_historical"""
+    data: list[Any] | None = None
+    errors: list[Any] | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
