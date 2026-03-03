@@ -11,9 +11,9 @@ from socialconnector.core.models import (
     MessageResponse,
     PaginatedResult,
 )
-from socialconnector.providers.x.shared_models import GetByIdsResponse
 
 from .models import (
+    GetByIdsResponse,
     HideReplyRequest,
     HideReplyResponse,
     Tweet,
